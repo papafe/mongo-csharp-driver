@@ -2170,6 +2170,7 @@ namespace MongoDB.Driver
                 {
                     IHierarchicalDiscriminatorConvention hierarchicalDiscriminatorConvention => DiscriminatorAstFilter.TypeIs(discriminatorField, hierarchicalDiscriminatorConvention, nominalType, actualType),
                     IScalarDiscriminatorConvention scalarDiscriminatorConvention => DiscriminatorAstFilter.TypeIs(discriminatorField, scalarDiscriminatorConvention, nominalType, actualType),
+                    //TODO This is where I need to add support
                     _ => throw new NotSupportedException("OfType is not supported with the configured discriminator convention.")
                 };
             }
