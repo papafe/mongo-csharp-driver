@@ -591,6 +591,8 @@ namespace MongoDB.Bson.Serialization
 
             if (ShouldSerializeDiscriminator(args.NominalType))
             {
+                //TODO This seems to be the perfect time to check if there is a duplication with the discriminator
+
                 SerializeDiscriminator(context, args.NominalType, document);
             }
 
