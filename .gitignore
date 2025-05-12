@@ -73,6 +73,7 @@ tests/FaasTests/LambdaTests/.aws-sam
 # Other
 artifacts
 packages
+tests/SourceGenerationBenchmarks/BenchmarkDotNet.Artifacts/*
 /tools
 /evergreen/krb5.conf.empty
 .config
