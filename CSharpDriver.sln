@@ -60,6 +60,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoDB.Driver.Encryption.T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoDB.Driver.Authentication.AWS", "src\MongoDB.Driver.Authentication.AWS\MongoDB.Driver.Authentication.AWS.csproj", "{A0CAC199-457E-4862-AF9E-971C7A77CBF9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SourceGenerationBenchmarks", "tests\SourceGenerationBenchmarks\SourceGenerationBenchmarks.csproj", "{F2E43A6C-0AF9-49A1-B0DC-B391240105B3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -130,6 +132,10 @@ Global
 		{A0CAC199-457E-4862-AF9E-971C7A77CBF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A0CAC199-457E-4862-AF9E-971C7A77CBF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A0CAC199-457E-4862-AF9E-971C7A77CBF9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2E43A6C-0AF9-49A1-B0DC-B391240105B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2E43A6C-0AF9-49A1-B0DC-B391240105B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2E43A6C-0AF9-49A1-B0DC-B391240105B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2E43A6C-0AF9-49A1-B0DC-B391240105B3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -153,6 +159,7 @@ Global
 		{642518BC-D28A-4ABC-851C-BC18CC34EEDA} = {D2012971-32BB-4C5F-BFC4-30A9994AB152}
 		{AB4AD0CB-756C-444F-9F37-26DA35148934} = {E472BDF5-61F1-461D-872B-9F53BB3ACA80}
 		{A0CAC199-457E-4862-AF9E-971C7A77CBF9} = {D2012971-32BB-4C5F-BFC4-30A9994AB152}
+		{F2E43A6C-0AF9-49A1-B0DC-B391240105B3} = {E472BDF5-61F1-461D-872B-9F53BB3ACA80}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {24BEC44B-92B0-43AA-9B15-163459D0C098}
