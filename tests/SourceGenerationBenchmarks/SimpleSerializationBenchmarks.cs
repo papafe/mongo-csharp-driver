@@ -24,7 +24,8 @@ namespace SourceGenerationBenchmarks;
 [MemoryDiagnoser]
 public class SimpleSerializationBenchmarks
 {
-    private const int countDocument = 500;
+    [Params(1, 30)]
+    public int CountDocuments;
 
     private List<TestDocument> _testDocuments;
     private List<string> _testJsonStrings;
@@ -35,7 +36,8 @@ public class SimpleSerializationBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        Console.WriteLine("haha");
+        Console.WriteLine($"Setting up SimpleSerializationBenchmarks... for {CountDocuments}");
+
         var classMap = new BsonClassMap<TestDocument>(cm =>
         {
             cm.AutoMap();
@@ -45,7 +47,7 @@ public class SimpleSerializationBenchmarks
 
         BsonSerializer.RegisterSerializer(new TestDocument2Serializer());
 
-        _testDocuments = Enumerable.Range(0, countDocument).Select(i => new TestDocument
+        _testDocuments = Enumerable.Range(0, CountDocuments).Select(i => new TestDocument
         {
             Id = i,
             Name = $"Item {i}",
@@ -53,7 +55,7 @@ public class SimpleSerializationBenchmarks
 
         _testJsonStrings = _testDocuments.Select(d => d.ToJson()).ToList();
 
-        _testDocuments2 = Enumerable.Range(0, countDocument).Select(i => new TestDocument2
+        _testDocuments2 = Enumerable.Range(0, CountDocuments).Select(i => new TestDocument2
         {
             Id = i,
             Name = $"Item {i}",
@@ -63,40 +65,16 @@ public class SimpleSerializationBenchmarks
     }
 
     [Benchmark]
-    public void Serialize_Base()
-    {
-        foreach (var doc in _testDocuments)
-        {
-            _ = doc.ToJson();
-        }
-    }
+    public void Serialize_Base() => _ = _testDocuments.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public void Deserialize_Base()
-    {
-        foreach (var json in _testJsonStrings)
-        {
-            _ = BsonSerializer.Deserialize<TestDocument>(json);
-        }
-    }
+    public void Deserialize_Base() => _ = _testJsonStrings.Select(j => BsonSerializer.Deserialize<TestDocument>(j)).ToList();
 
     [Benchmark]
-    public void Serialize_Generated()
-    {
-        foreach (var doc in _testDocuments2)
-        {
-            _ = doc.ToJson();
-        }
-    }
+    public void Serialize_Generated() => _ = _testDocuments2.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public void Deserialize_Generated()
-    {
-        foreach (var json in _testJsonStrings2)
-        {
-            _ = BsonSerializer.Deserialize<TestDocument2>(json);
-        }
-    }
+    public void Deserialize_Generated() => _ = _testJsonStrings2.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
 
     public class TestDocument
     {
@@ -123,18 +101,28 @@ public class SimpleSerializationBenchmarks
         public override TestDocument2 Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
         {
             context.Reader.ReadStartDocument();
-            var id = context.Reader.ReadInt32(nameof(TestDocument2.Id));
-            var name = context.Reader.ReadString(nameof(TestDocument2.Name));
+            int id = 0;
+            string name = null;
+
+            while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
+            {
+                var propertyName = context.Reader.ReadName();
+                switch (propertyName)
+                {
+                    case nameof(TestDocument2.Id):
+                        id = context.Reader.ReadInt32();
+                        break;
+                    case nameof(TestDocument2.Name):
+                        name = context.Reader.ReadString();
+                        break;
+                    default:
+                        context.Reader.SkipValue();
+                        break;
+                }
+            }
+
             context.Reader.ReadEndDocument();
             return new TestDocument2 { Id = id, Name = name };
         }
     }
-
-    /* Possible improvements:
-     * - Try to spell out WriteInt32 instead of using default implementation, so that's faster, maybe
-     * - Use a complex test document with more properties
-     * - Use a complex test document with nested properties
-     * -
-     *
-     */
 }
