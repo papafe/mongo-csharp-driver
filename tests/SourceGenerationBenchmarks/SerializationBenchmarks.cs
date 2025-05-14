@@ -34,7 +34,7 @@ public class SerializationBenchmarks : BaseSerializationBenchmarks
 
         BsonSerializer.RegisterSerializer(new TestDocument2Serializer());
 
-        GenerateDocuments();
+        GenerateData();
     }
 
     [Benchmark]

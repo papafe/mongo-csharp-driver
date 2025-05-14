@@ -30,7 +30,7 @@ public class SerializationBenchmarksColdStart : BaseSerializationBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        GenerateDocuments();
+        GenerateData();
     }
 
     [Benchmark]

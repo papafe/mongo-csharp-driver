@@ -26,13 +26,13 @@ public class BaseSerializationBenchmarks
     [Params(1000)]
     public int CountDocuments;
 
-    private List<TestDocument> _docs;
+    protected List<TestDocument> _docs;
     protected List<TestDocument1> _docs1;
     protected List<TestDocument2> _docs2;
     protected List<string> _jsons;
     protected List<byte[]> _bsons;
 
-    protected void GenerateDocuments()
+    protected void GenerateData()
     {
         _docs = Enumerable.Range(0, CountDocuments).Select(i => new TestDocument
         {
