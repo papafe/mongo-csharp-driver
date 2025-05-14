@@ -38,14 +38,34 @@ public class SerializationBenchmarks : BaseSerializationBenchmarks
     }
 
     [Benchmark]
-    public List<string> Serialize_Base() => _docs1.Select(d => d.ToJson()).ToList();
+    [BenchmarkCategory("String", "Serialize", "Base")]
+    public List<string> Serialize_String_Base() => _docs1.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public List<TestDocument1> Deserialize_Base() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
+    [BenchmarkCategory("String", "Deserialize", "Base")]
+    public List<TestDocument1> Deserialize_String_Base() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
 
     [Benchmark]
-    public List<string> Serialize_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
+    [BenchmarkCategory("String", "Serialize", "Generated")]
+    public List<string> Serialize_String_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public List<TestDocument2> Deserialize_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
+    [BenchmarkCategory("String", "Deserialize", "Generated")]
+    public List<TestDocument2> Deserialize_String_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
+
+    [Benchmark]
+    [BenchmarkCategory("Binary", "Serialize", "Base")]
+    public List<byte[]> Serialize_Binary_Base() => _docs1.Select(d => d.ToBson()).ToList();
+
+    [Benchmark]
+    [BenchmarkCategory("Binary", "Deserialize", "Base")]
+    public List<TestDocument1> Deserialize_Binary_Base() => _bsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
+
+    [Benchmark]
+    [BenchmarkCategory("Binary", "Serialize", "Generated")]
+    public List<byte[]> Serialize_Binary_Generated() => _ = _docs2.Select(d => d.ToBson()).ToList();
+
+    [Benchmark]
+    [BenchmarkCategory("Binary", "Deserialize", "Generated")]
+    public List<TestDocument2> Deserialize_Binary_Generated() => _bsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
 }
