@@ -20,19 +20,19 @@ using MongoDB.Bson.Serialization;
 namespace SourceGenerationBenchmarks;
 
 [MemoryDiagnoser]
-public class ComplexSerializationBenchmarks : BaseSerializationBenchmarks
+public class SerializationBenchmarks : BaseSerializationBenchmarks
 {
     [GlobalSetup]
     public void GlobalSetup()
     {
-        var classMap = new BsonClassMap<ComplexTestDocument1>(cm =>
+        var classMap = new BsonClassMap<TestDocument1>(cm =>
         {
             cm.AutoMap();
         });
         classMap.Freeze();
-        BsonSerializer.RegisterSerializer(typeof(ComplexTestDocument1), new BsonClassMapSerializer<ComplexTestDocument1>(classMap));
+        BsonSerializer.RegisterSerializer(typeof(TestDocument1), new BsonClassMapSerializer<TestDocument1>(classMap));
 
-        BsonSerializer.RegisterSerializer(new ComplexTestDocument2Serializer());
+        BsonSerializer.RegisterSerializer(new TestDocument2Serializer());
 
         GenerateDocuments();
     }
@@ -41,11 +41,11 @@ public class ComplexSerializationBenchmarks : BaseSerializationBenchmarks
     public List<string> Serialize_Base() => _docs1.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public List<ComplexTestDocument1> Deserialize_Base() => _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument1>(j)).ToList();
+    public List<TestDocument1> Deserialize_Base() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
 
     [Benchmark]
     public List<string> Serialize_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public List<ComplexTestDocument2> Deserialize_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument2>(j)).ToList();
+    public List<TestDocument2> Deserialize_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
 }

@@ -26,15 +26,15 @@ public class BaseSerializationBenchmarks
     [Params(1000)]
     public int CountDocuments;
 
-    private List<ComplexTestDocument> _docs;
-    protected List<ComplexTestDocument1> _docs1;
-    protected List<ComplexTestDocument2> _docs2;
+    private List<TestDocument> _docs;
+    protected List<TestDocument1> _docs1;
+    protected List<TestDocument2> _docs2;
     protected List<string> _jsons;
     protected List<byte[]> _bsons;
 
     protected void GenerateDocuments()
     {
-        _docs = Enumerable.Range(0, CountDocuments).Select(i => new ComplexTestDocument
+        _docs = Enumerable.Range(0, CountDocuments).Select(i => new TestDocument
         {
             Id = i,
             Name = $"Doc {i}",
@@ -46,7 +46,7 @@ public class BaseSerializationBenchmarks
             ]
         }).ToList();
 
-        _docs1 = _docs.Select(d => new ComplexTestDocument1
+        _docs1 = _docs.Select(d => new TestDocument1
         {
             Id = d.Id,
             Name = d.Name,
@@ -54,7 +54,7 @@ public class BaseSerializationBenchmarks
             Items = d.Items.Select(i => new Item1 { Label = i.Label, Value = i.Value }).ToList()
         }).ToList();
 
-        _docs2 = _docs.Select(d => new ComplexTestDocument2
+        _docs2 = _docs.Select(d => new TestDocument2
         {
             Id = d.Id,
             Name = d.Name,
@@ -66,7 +66,7 @@ public class BaseSerializationBenchmarks
         _bsons = _docs.Select(d => d.ToBson()).ToList();
     }
 
-    public class ComplexTestDocument
+    public class TestDocument
     {
         public int Id { get; set; }
         public string Name { get; set; }
@@ -86,7 +86,7 @@ public class BaseSerializationBenchmarks
         public double Value { get; set; }
     }
 
-    public class ComplexTestDocument1
+    public class TestDocument1
     {
         public int Id { get; set; }
         public string Name { get; set; }
@@ -106,7 +106,7 @@ public class BaseSerializationBenchmarks
         public double Value { get; set; }
     }
 
-    public class ComplexTestDocument2
+    public class TestDocument2
     {
         public int Id { get; set; }
         public string Name { get; set; }
@@ -126,21 +126,21 @@ public class BaseSerializationBenchmarks
         public double Value { get; set; }
     }
 
-    protected class ComplexTestDocument2Serializer : ClassSerializerBase<ComplexTestDocument2>
+    protected class TestDocument2Serializer : ClassSerializerBase<TestDocument2>
     {
-        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, ComplexTestDocument2 value)
+        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, TestDocument2 value)
         {
             context.Writer.WriteStartDocument();
-            context.Writer.WriteInt32(nameof(ComplexTestDocument2.Id), value.Id);
-            context.Writer.WriteString(nameof(ComplexTestDocument2.Name), value.Name);
+            context.Writer.WriteInt32(nameof(TestDocument2.Id), value.Id);
+            context.Writer.WriteString(nameof(TestDocument2.Name), value.Name);
 
-            context.Writer.WriteName(nameof(ComplexTestDocument2.Metadata));
+            context.Writer.WriteName(nameof(TestDocument2.Metadata));
             context.Writer.WriteStartDocument();
             context.Writer.WriteString(nameof(Metadata1.Category), value.Metadata.Category);
             context.Writer.WriteDateTime(nameof(Metadata1.Timestamp), BsonUtils.ToMillisecondsSinceEpoch(value.Metadata.Timestamp.ToUniversalTime()));
             context.Writer.WriteEndDocument();
 
-            context.Writer.WriteName(nameof(ComplexTestDocument2.Items));
+            context.Writer.WriteName(nameof(TestDocument2.Items));
             context.Writer.WriteStartArray();
             foreach (var item in value.Items)
             {
@@ -154,7 +154,7 @@ public class BaseSerializationBenchmarks
             context.Writer.WriteEndDocument();
         }
 
-        public override ComplexTestDocument2 Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
+        public override TestDocument2 Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
         {
             context.Reader.ReadStartDocument();
             var id = 0;
@@ -167,13 +167,13 @@ public class BaseSerializationBenchmarks
                 var fieldName = context.Reader.ReadName();
                 switch (fieldName)
                 {
-                    case nameof(ComplexTestDocument2.Id):
+                    case nameof(TestDocument2.Id):
                         id = context.Reader.ReadInt32();
                         break;
-                    case nameof(ComplexTestDocument2.Name):
+                    case nameof(TestDocument2.Name):
                         name = context.Reader.ReadString();
                         break;
-                    case nameof(ComplexTestDocument2.Metadata):
+                    case nameof(TestDocument2.Metadata):
                         context.Reader.ReadStartDocument();
                         var category = string.Empty;
                         DateTime timestamp = default;
@@ -193,7 +193,7 @@ public class BaseSerializationBenchmarks
                         context.Reader.ReadEndDocument();
                         metadata = new Metadata2 { Category = category, Timestamp = timestamp };
                         break;
-                    case nameof(ComplexTestDocument2.Items):
+                    case nameof(TestDocument2.Items):
                         context.Reader.ReadStartArray();
                         while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
                         {
@@ -226,7 +226,7 @@ public class BaseSerializationBenchmarks
 
             context.Reader.ReadEndDocument();
 
-            return new ComplexTestDocument2
+            return new TestDocument2
             {
                 Id = id,
                 Name = name,

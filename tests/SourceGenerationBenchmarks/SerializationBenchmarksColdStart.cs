@@ -22,8 +22,8 @@ namespace SourceGenerationBenchmarks;
 
 [MemoryDiagnoser]
 [SimpleJob(RunStrategy.Monitoring, launchCount: 10,
-    warmupCount: 0, iterationCount: 1)]
-public class ComplexSerializationBenchmarksColdStart : BaseSerializationBenchmarks
+    warmupCount: 0, iterationCount: 1)] //This is used to simulate the cold start
+public class SerializationBenchmarksColdStart : BaseSerializationBenchmarks
 {
     private bool _setup;
 
@@ -40,9 +40,9 @@ public class ComplexSerializationBenchmarksColdStart : BaseSerializationBenchmar
     }
 
     [Benchmark]
-    public List<ComplexTestDocument1> Deserialize_Base()
+    public List<TestDocument1> Deserialize_Base()
     {
-        return _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument1>(j)).ToList();
+        return _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
     }
 
     [Benchmark]
@@ -53,17 +53,17 @@ public class ComplexSerializationBenchmarksColdStart : BaseSerializationBenchmar
     }
 
     [Benchmark]
-    public List<ComplexTestDocument2> Deserialize_Generated()
+    public List<TestDocument2> Deserialize_Generated()
     {
         RegisterGeneratedSerializerIfNecessary();
-        return _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument2>(j)).ToList();
+        return _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
     }
 
     private void RegisterGeneratedSerializerIfNecessary()
     {
         if (_setup)
         {
-            BsonSerializer.RegisterSerializer(new ComplexTestDocument2Serializer());
+            BsonSerializer.RegisterSerializer(new TestDocument2Serializer());
             _setup = true;
         }
     }
