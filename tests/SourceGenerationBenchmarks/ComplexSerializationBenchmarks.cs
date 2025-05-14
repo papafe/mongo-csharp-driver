@@ -35,7 +35,6 @@ public class ComplexSerializationBenchmarks : BaseSerializationBenchmarks
         BsonSerializer.RegisterSerializer(new ComplexTestDocument2Serializer());
 
         GenerateDocuments();
-        GeneratedSerializedDocuments();
     }
 
     [Benchmark]

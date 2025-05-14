@@ -27,20 +27,10 @@ public class ComplexSerializationBenchmarksColdStart : BaseSerializationBenchmar
 {
     private bool _setup;
 
-    [GlobalSetup(Targets = [nameof(Serialize_Base), nameof(Deserialize_Base)])]
-    public void GlobalSetupBase()
+    [GlobalSetup]
+    public void GlobalSetup()
     {
         GenerateDocuments();
-        _jsons = _docs2.Select(d => d.ToJson()).ToList();
-        //TODO Don't like it this, way
-        //It's done like this so we don't already create the serializer for the type
-    }
-
-    [GlobalSetup(Targets = [nameof(Serialize_Generated), nameof(Deserialize_Generated)])]
-    public void GlobalSetupGenerated()
-    {
-        GenerateDocuments();
-        _jsons = _docs1.Select(d => d.ToJson()).ToList();
     }
 
     [Benchmark]

@@ -23,10 +23,10 @@ namespace SourceGenerationBenchmarks;
 
 public class BaseSerializationBenchmarks
 {
-    [Params(100, 1000, 10000)]
+    [Params(1000)]
     public int CountDocuments;
 
-    protected List<ComplexTestDocument> _docs;
+    private List<ComplexTestDocument> _docs;
     protected List<ComplexTestDocument1> _docs1;
     protected List<ComplexTestDocument2> _docs2;
     protected List<string> _jsons;
@@ -45,7 +45,7 @@ public class BaseSerializationBenchmarks
             }
         }).ToList();
 
-        _docs1 = _docs1.Select(d => new ComplexTestDocument1
+        _docs1 = _docs.Select(d => new ComplexTestDocument1
         {
             Id = d.Id,
             Name = d.Name,
@@ -53,17 +53,14 @@ public class BaseSerializationBenchmarks
             Items = d.Items.Select(i => new Item1 { Label = i.Label, Value = i.Value }).ToList()
         }).ToList();
 
-        _docs2 = _docs1.Select(d => new ComplexTestDocument2
+        _docs2 = _docs.Select(d => new ComplexTestDocument2
         {
             Id = d.Id,
             Name = d.Name,
             Metadata = new Metadata2 { Category = d.Metadata.Category, Timestamp = d.Metadata.Timestamp },
             Items = d.Items.Select(i => new Item2 { Label = i.Label, Value = i.Value }).ToList()
         }).ToList();
-    }
 
-    protected void GeneratedSerializedDocuments()
-    {
         _jsons = _docs.Select(d => d.ToJson()).ToList();
         _bsons = _docs.Select(d => d.ToBson()).ToList();
     }
