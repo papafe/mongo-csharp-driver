@@ -27,8 +27,10 @@ public class BaseSerializationBenchmarks
     public int CountDocuments;
 
     protected List<ComplexTestDocument> _docs;
+    protected List<ComplexTestDocument1> _docs1;
     protected List<ComplexTestDocument2> _docs2;
     protected List<string> _jsons;
+    protected List<byte[]> _bsons;
 
     protected void GenerateDocuments()
     {
@@ -43,7 +45,15 @@ public class BaseSerializationBenchmarks
             }
         }).ToList();
 
-        _docs2 = _docs.Select(d => new ComplexTestDocument2
+        _docs1 = _docs1.Select(d => new ComplexTestDocument1
+        {
+            Id = d.Id,
+            Name = d.Name,
+            Metadata = new Metadata1 { Category = d.Metadata.Category, Timestamp = d.Metadata.Timestamp },
+            Items = d.Items.Select(i => new Item1 { Label = i.Label, Value = i.Value }).ToList()
+        }).ToList();
+
+        _docs2 = _docs1.Select(d => new ComplexTestDocument2
         {
             Id = d.Id,
             Name = d.Name,
@@ -55,6 +65,7 @@ public class BaseSerializationBenchmarks
     protected void GeneratedSerializedDocuments()
     {
         _jsons = _docs.Select(d => d.ToJson()).ToList();
+        _bsons = _docs.Select(d => d.ToBson()).ToList();
     }
 
     public class ComplexTestDocument
@@ -72,6 +83,26 @@ public class BaseSerializationBenchmarks
     }
 
     public class Item
+    {
+        public string Label { get; set; }
+        public double Value { get; set; }
+    }
+
+    public class ComplexTestDocument1
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public Metadata1 Metadata { get; set; }
+        public List<Item1> Items { get; set; }
+    }
+
+    public class Metadata1
+    {
+        public string Category { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    public class Item1
     {
         public string Label { get; set; }
         public double Value { get; set; }
@@ -107,8 +138,8 @@ public class BaseSerializationBenchmarks
 
             context.Writer.WriteName(nameof(ComplexTestDocument2.Metadata));
             context.Writer.WriteStartDocument();
-            context.Writer.WriteString(nameof(Metadata.Category), value.Metadata.Category);
-            context.Writer.WriteDateTime(nameof(Metadata.Timestamp), BsonUtils.ToMillisecondsSinceEpoch(value.Metadata.Timestamp.ToUniversalTime()));
+            context.Writer.WriteString(nameof(Metadata1.Category), value.Metadata.Category);
+            context.Writer.WriteDateTime(nameof(Metadata1.Timestamp), BsonUtils.ToMillisecondsSinceEpoch(value.Metadata.Timestamp.ToUniversalTime()));
             context.Writer.WriteEndDocument();
 
             context.Writer.WriteName(nameof(ComplexTestDocument2.Items));
@@ -116,8 +147,8 @@ public class BaseSerializationBenchmarks
             foreach (var item in value.Items)
             {
                 context.Writer.WriteStartDocument();
-                context.Writer.WriteString(nameof(Item.Label), item.Label);
-                context.Writer.WriteDouble(nameof(Item.Value), item.Value);
+                context.Writer.WriteString(nameof(Item1.Label), item.Label);
+                context.Writer.WriteDouble(nameof(Item1.Value), item.Value);
                 context.Writer.WriteEndDocument();
             }
             context.Writer.WriteEndArray();
@@ -153,10 +184,10 @@ public class BaseSerializationBenchmarks
                             var metadataField = context.Reader.ReadName();
                             switch (metadataField)
                             {
-                                case nameof(Metadata.Category):
+                                case nameof(Metadata1.Category):
                                     category = context.Reader.ReadString();
                                     break;
-                                case nameof(Metadata.Timestamp):
+                                case nameof(Metadata1.Timestamp):
                                     timestamp = new BsonDateTime(context.Reader.ReadDateTime()).ToUniversalTime();
                                     break;
                             }
@@ -176,10 +207,10 @@ public class BaseSerializationBenchmarks
                                 var itemField = context.Reader.ReadName();
                                 switch (itemField)
                                 {
-                                    case nameof(Item.Label):
+                                    case nameof(Item1.Label):
                                         label = context.Reader.ReadString();
                                         break;
-                                    case nameof(Item.Value):
+                                    case nameof(Item1.Value):
                                         value = context.Reader.ReadDouble();
                                         break;
                                 }

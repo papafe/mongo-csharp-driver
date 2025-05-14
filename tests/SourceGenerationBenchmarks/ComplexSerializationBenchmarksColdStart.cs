@@ -40,19 +40,19 @@ public class ComplexSerializationBenchmarksColdStart : BaseSerializationBenchmar
     public void GlobalSetupGenerated()
     {
         GenerateDocuments();
-        _jsons = _docs.Select(d => d.ToJson()).ToList();
+        _jsons = _docs1.Select(d => d.ToJson()).ToList();
     }
 
     [Benchmark]
     public List<string> Serialize_Base()
     {
-        return _docs.Select(d => d.ToJson()).ToList();
+        return _docs1.Select(d => d.ToJson()).ToList();
     }
 
     [Benchmark]
-    public List<ComplexTestDocument> Deserialize_Base()
+    public List<ComplexTestDocument1> Deserialize_Base()
     {
-        return _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument>(j)).ToList();
+        return _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument1>(j)).ToList();
     }
 
     [Benchmark]

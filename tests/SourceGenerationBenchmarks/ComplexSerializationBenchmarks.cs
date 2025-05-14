@@ -25,12 +25,12 @@ public class ComplexSerializationBenchmarks : BaseSerializationBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        var classMap = new BsonClassMap<ComplexTestDocument>(cm =>
+        var classMap = new BsonClassMap<ComplexTestDocument1>(cm =>
         {
             cm.AutoMap();
         });
         classMap.Freeze();
-        BsonSerializer.RegisterSerializer(typeof(ComplexTestDocument), new BsonClassMapSerializer<ComplexTestDocument>(classMap));
+        BsonSerializer.RegisterSerializer(typeof(ComplexTestDocument1), new BsonClassMapSerializer<ComplexTestDocument1>(classMap));
 
         BsonSerializer.RegisterSerializer(new ComplexTestDocument2Serializer());
 
@@ -39,10 +39,10 @@ public class ComplexSerializationBenchmarks : BaseSerializationBenchmarks
     }
 
     [Benchmark]
-    public List<string> Serialize_Base() => _docs.Select(d => d.ToJson()).ToList();
+    public List<string> Serialize_Base() => _docs1.Select(d => d.ToJson()).ToList();
 
     [Benchmark]
-    public List<ComplexTestDocument> Deserialize_Base() => _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument>(j)).ToList();
+    public List<ComplexTestDocument1> Deserialize_Base() => _jsons.Select(j => BsonSerializer.Deserialize<ComplexTestDocument1>(j)).ToList();
 
     [Benchmark]
     public List<string> Serialize_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
