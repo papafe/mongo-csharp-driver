@@ -6,6 +6,11 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        var summary = BenchmarkRunner.Run<SimpleSerializationBenchmarks>();
+        // var b = new ComplexSerializationBenchmarksColdStart();
+        // b.GlobalSetupGenerated();
+        // b.Serialize_Generated();
+
+
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
 }
