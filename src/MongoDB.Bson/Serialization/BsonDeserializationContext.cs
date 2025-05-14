@@ -156,8 +156,11 @@ namespace MongoDB.Bson.Serialization
                 }
                 else
                 {
-                    _dynamicArraySerializer = BsonDefaults.DynamicArraySerializer;
-                    _dynamicDocumentSerializer = BsonDefaults.DynamicDocumentSerializer;
+                    // _dynamicArraySerializer = BsonDefaults.DynamicArraySerializer;
+                    // _dynamicDocumentSerializer = BsonDefaults.DynamicDocumentSerializer;
+
+                    _dynamicArraySerializer = null;
+                    _dynamicDocumentSerializer = null;
                 }
             }
 

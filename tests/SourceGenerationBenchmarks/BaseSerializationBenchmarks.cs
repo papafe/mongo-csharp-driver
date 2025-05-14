@@ -23,16 +23,25 @@ namespace SourceGenerationBenchmarks;
 
 public class BaseSerializationBenchmarks
 {
-    [Params(1000)]
+    [Params(100, 1000, 10000)]
     public int CountDocuments;
 
     protected List<TestDocument> _docs;
     protected List<TestDocument1> _docs1;
     protected List<TestDocument2> _docs2;
+    protected List<TestDocument3> _docs3;
     protected List<string> _jsons;
     protected List<byte[]> _bsons;
 
     protected void GenerateData()
+    {
+        GenerateDocuments();
+
+        _jsons = _docs.Select(d => d.ToJson()).ToList();
+        _bsons = _docs.Select(d => d.ToBson()).ToList();
+    }
+
+    protected void GenerateDocuments()
     {
         _docs = Enumerable.Range(0, CountDocuments).Select(i => new TestDocument
         {
@@ -62,8 +71,13 @@ public class BaseSerializationBenchmarks
             Items = d.Items.Select(i => new Item2 { Label = i.Label, Value = i.Value }).ToList()
         }).ToList();
 
-        _jsons = _docs.Select(d => d.ToJson()).ToList();
-        _bsons = _docs.Select(d => d.ToBson()).ToList();
+        _docs3 = _docs.Select(d => new TestDocument3
+        {
+            Id = d.Id,
+            Name = d.Name,
+            Metadata = new Metadata3 { Category = d.Metadata.Category, Timestamp = d.Metadata.Timestamp },
+            Items = d.Items.Select(i => new Item3 { Label = i.Label, Value = i.Value }).ToList()
+        }).ToList();
     }
 
     public class TestDocument
@@ -121,6 +135,26 @@ public class BaseSerializationBenchmarks
     }
 
     public class Item2
+    {
+        public string Label { get; set; }
+        public double Value { get; set; }
+    }
+
+    public class TestDocument3
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public Metadata3 Metadata { get; set; }
+        public List<Item3> Items { get; set; }
+    }
+
+    public class Metadata3
+    {
+        public string Category { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    public class Item3
     {
         public string Label { get; set; }
         public double Value { get; set; }
@@ -227,6 +261,117 @@ public class BaseSerializationBenchmarks
             context.Reader.ReadEndDocument();
 
             return new TestDocument2
+            {
+                Id = id,
+                Name = name,
+                Metadata = metadata,
+                Items = items
+            };
+        }
+    }
+
+    //TODO This is a copy of the previous serializer, could be put in a single class
+    protected class TestDocument3Serializer : ClassSerializerBase<TestDocument3>
+    {
+        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, TestDocument3 value)
+        {
+            context.Writer.WriteStartDocument();
+            context.Writer.WriteInt32(nameof(TestDocument3.Id), value.Id);
+            context.Writer.WriteString(nameof(TestDocument3.Name), value.Name);
+
+            context.Writer.WriteName(nameof(TestDocument3.Metadata));
+            context.Writer.WriteStartDocument();
+            context.Writer.WriteString(nameof(Metadata3.Category), value.Metadata.Category);
+            context.Writer.WriteDateTime(nameof(Metadata3.Timestamp), BsonUtils.ToMillisecondsSinceEpoch(value.Metadata.Timestamp.ToUniversalTime()));
+            context.Writer.WriteEndDocument();
+
+            context.Writer.WriteName(nameof(TestDocument3.Items));
+            context.Writer.WriteStartArray();
+            foreach (var item in value.Items)
+            {
+                context.Writer.WriteStartDocument();
+                context.Writer.WriteString(nameof(Item3.Label), item.Label);
+                context.Writer.WriteDouble(nameof(Item3.Value), item.Value);
+                context.Writer.WriteEndDocument();
+            }
+            context.Writer.WriteEndArray();
+
+            context.Writer.WriteEndDocument();
+        }
+
+        public override TestDocument3 Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
+        {
+            context.Reader.ReadStartDocument();
+            var id = 0;
+            string name = null;
+            Metadata3 metadata = null;
+            var items = new List<Item3>();
+
+            while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
+            {
+                var fieldName = context.Reader.ReadName();
+                switch (fieldName)
+                {
+                    case nameof(TestDocument3.Id):
+                        id = context.Reader.ReadInt32();
+                        break;
+                    case nameof(TestDocument3.Name):
+                        name = context.Reader.ReadString();
+                        break;
+                    case nameof(TestDocument3.Metadata):
+                        context.Reader.ReadStartDocument();
+                        var category = string.Empty;
+                        DateTime timestamp = default;
+                        while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
+                        {
+                            var metadataField = context.Reader.ReadName();
+                            switch (metadataField)
+                            {
+                                case nameof(Metadata3.Category):
+                                    category = context.Reader.ReadString();
+                                    break;
+                                case nameof(Metadata3.Timestamp):
+                                    timestamp = new BsonDateTime(context.Reader.ReadDateTime()).ToUniversalTime();
+                                    break;
+                            }
+                        }
+                        context.Reader.ReadEndDocument();
+                        metadata = new Metadata3 { Category = category, Timestamp = timestamp };
+                        break;
+                    case nameof(TestDocument2.Items):
+                        context.Reader.ReadStartArray();
+                        while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
+                        {
+                            context.Reader.ReadStartDocument();
+                            var label = string.Empty;
+                            double value = 0;
+                            while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
+                            {
+                                var itemField = context.Reader.ReadName();
+                                switch (itemField)
+                                {
+                                    case nameof(Item3.Label):
+                                        label = context.Reader.ReadString();
+                                        break;
+                                    case nameof(Item3.Value):
+                                        value = context.Reader.ReadDouble();
+                                        break;
+                                }
+                            }
+                            context.Reader.ReadEndDocument();
+                            items.Add(new Item3 { Label = label, Value = value });
+                        }
+                        context.Reader.ReadEndArray();
+                        break;
+                    default:
+                        context.Reader.SkipValue();
+                        break;
+                }
+            }
+
+            context.Reader.ReadEndDocument();
+
+            return new TestDocument3
             {
                 Id = id,
                 Name = name,
