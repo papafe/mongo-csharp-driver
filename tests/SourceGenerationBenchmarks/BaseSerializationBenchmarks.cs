@@ -39,10 +39,11 @@ public class BaseSerializationBenchmarks
             Id = i,
             Name = $"Doc {i}",
             Metadata = new Metadata { Category = "alpha", Timestamp = DateTime.UtcNow },
-            Items = new List<Item> {
+            Items =
+            [
                 new() { Label = "a", Value = i },
                 new() { Label = "b", Value = i }
-            }
+            ]
         }).ToList();
 
         _docs1 = _docs.Select(d => new ComplexTestDocument1
