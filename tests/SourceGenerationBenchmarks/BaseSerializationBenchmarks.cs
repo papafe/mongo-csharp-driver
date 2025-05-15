@@ -270,113 +270,43 @@ public class BaseSerializationBenchmarks
         }
     }
 
-    //TODO This is a copy of the previous serializer, could be put in a single class
+    //This is used only for creating values in the setup stage, it's not used in the benchmarks
     protected class TestDocument3Serializer : ClassSerializerBase<TestDocument3>
     {
-        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, TestDocument3 value)
+        private readonly TestDocument2Serializer _innerSerializer = new();
+
+        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args,
+            TestDocument3 value)
         {
-            context.Writer.WriteStartDocument();
-            context.Writer.WriteInt32(nameof(TestDocument3.Id), value.Id);
-            context.Writer.WriteString(nameof(TestDocument3.Name), value.Name);
-
-            context.Writer.WriteName(nameof(TestDocument3.Metadata));
-            context.Writer.WriteStartDocument();
-            context.Writer.WriteString(nameof(Metadata3.Category), value.Metadata.Category);
-            context.Writer.WriteDateTime(nameof(Metadata3.Timestamp), BsonUtils.ToMillisecondsSinceEpoch(value.Metadata.Timestamp.ToUniversalTime()));
-            context.Writer.WriteEndDocument();
-
-            context.Writer.WriteName(nameof(TestDocument3.Items));
-            context.Writer.WriteStartArray();
-            foreach (var item in value.Items)
+            var testDocument2 = new TestDocument2
             {
-                context.Writer.WriteStartDocument();
-                context.Writer.WriteString(nameof(Item3.Label), item.Label);
-                context.Writer.WriteDouble(nameof(Item3.Value), item.Value);
-                context.Writer.WriteEndDocument();
-            }
-            context.Writer.WriteEndArray();
+                Id = value.Id,
+                Name = value.Name,
+                Metadata = new Metadata2
+                {
+                    Category = value.Metadata.Category,
+                    Timestamp = value.Metadata.Timestamp
+                },
+                Items = value.Items.Select(i => new Item2 { Label = i.Label, Value = i.Value }).ToList()
+            };
 
-            context.Writer.WriteEndDocument();
+            _innerSerializer.Serialize(context, args, testDocument2);
         }
 
         public override TestDocument3 Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
         {
-            context.Reader.ReadStartDocument();
-            var id = 0;
-            string name = null;
-            Metadata3 metadata = null;
-            var items = new List<Item3>();
-
-            while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
-            {
-                var fieldName = context.Reader.ReadName();
-                switch (fieldName)
-                {
-                    case nameof(TestDocument3.Id):
-                        id = context.Reader.ReadInt32();
-                        break;
-                    case nameof(TestDocument3.Name):
-                        name = context.Reader.ReadString();
-                        break;
-                    case nameof(TestDocument3.Metadata):
-                        context.Reader.ReadStartDocument();
-                        var category = string.Empty;
-                        DateTime timestamp = default;
-                        while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
-                        {
-                            var metadataField = context.Reader.ReadName();
-                            switch (metadataField)
-                            {
-                                case nameof(Metadata3.Category):
-                                    category = context.Reader.ReadString();
-                                    break;
-                                case nameof(Metadata3.Timestamp):
-                                    timestamp = new BsonDateTime(context.Reader.ReadDateTime()).ToUniversalTime();
-                                    break;
-                            }
-                        }
-                        context.Reader.ReadEndDocument();
-                        metadata = new Metadata3 { Category = category, Timestamp = timestamp };
-                        break;
-                    case nameof(TestDocument2.Items):
-                        context.Reader.ReadStartArray();
-                        while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
-                        {
-                            context.Reader.ReadStartDocument();
-                            var label = string.Empty;
-                            double value = 0;
-                            while (context.Reader.ReadBsonType() != BsonType.EndOfDocument)
-                            {
-                                var itemField = context.Reader.ReadName();
-                                switch (itemField)
-                                {
-                                    case nameof(Item3.Label):
-                                        label = context.Reader.ReadString();
-                                        break;
-                                    case nameof(Item3.Value):
-                                        value = context.Reader.ReadDouble();
-                                        break;
-                                }
-                            }
-                            context.Reader.ReadEndDocument();
-                            items.Add(new Item3 { Label = label, Value = value });
-                        }
-                        context.Reader.ReadEndArray();
-                        break;
-                    default:
-                        context.Reader.SkipValue();
-                        break;
-                }
-            }
-
-            context.Reader.ReadEndDocument();
+            var testDocument2 = _innerSerializer.Deserialize(context, args);
 
             return new TestDocument3
             {
-                Id = id,
-                Name = name,
-                Metadata = metadata,
-                Items = items
+                Id = testDocument2.Id,
+                Name = testDocument2.Name,
+                Metadata = new Metadata3
+                {
+                    Category = testDocument2.Metadata.Category,
+                    Timestamp = testDocument2.Metadata.Timestamp
+                },
+                Items = testDocument2.Items.Select(i => new Item3 { Label = i.Label, Value = i.Value }).ToList()
             };
         }
     }
