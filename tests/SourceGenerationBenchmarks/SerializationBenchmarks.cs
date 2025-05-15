@@ -37,21 +37,21 @@ public class SerializationBenchmarks : BaseSerializationBenchmarks
         GenerateData();
     }
 
-    [Benchmark]
-    [BenchmarkCategory("String", "Serialize", "Base")]
-    public List<string> Serialize_String_Base() => _docs1.Select(d => d.ToJson()).ToList();
-
-    [Benchmark]
-    [BenchmarkCategory("String", "Deserialize", "Base")]
-    public List<TestDocument1> Deserialize_String_Base() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
-
-    [Benchmark]
-    [BenchmarkCategory("String", "Serialize", "Generated")]
-    public List<string> Serialize_String_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
-
-    [Benchmark]
-    [BenchmarkCategory("String", "Deserialize", "Generated")]
-    public List<TestDocument2> Deserialize_String_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
+    // [Benchmark]
+    // [BenchmarkCategory("String", "Serialize", "Base")]
+    // public List<string> Serialize_String_Base() => _docs1.Select(d => d.ToJson()).ToList();
+    //
+    // [Benchmark]
+    // [BenchmarkCategory("String", "Deserialize", "Base")]
+    // public List<TestDocument1> Deserialize_String_Base() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument1>(j)).ToList();
+    //
+    // [Benchmark]
+    // [BenchmarkCategory("String", "Serialize", "Generated")]
+    // public List<string> Serialize_String_Generated() => _ = _docs2.Select(d => d.ToJson()).ToList();
+    //
+    // [Benchmark]
+    // [BenchmarkCategory("String", "Deserialize", "Generated")]
+    // public List<TestDocument2> Deserialize_String_Generated() => _jsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
 
     [Benchmark]
     [BenchmarkCategory("Binary", "Serialize", "Base")]

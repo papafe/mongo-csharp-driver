@@ -270,7 +270,7 @@ public class BaseSerializationBenchmarks
         }
     }
 
-    //This is used only for creating values in the setup stage, it's not used in the benchmarks
+    //This is used only for creating values in the setup stage, it's not used in the benchmarks.
     protected class TestDocument3Serializer : ClassSerializerBase<TestDocument3>
     {
         private readonly TestDocument2Serializer _innerSerializer = new();
