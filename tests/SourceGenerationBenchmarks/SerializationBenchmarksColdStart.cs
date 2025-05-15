@@ -81,7 +81,9 @@ public class SerializationBenchmarksColdStart : BaseSerializationBenchmarks
         return _bsons.Select(j => BsonSerializer.Deserialize<TestDocument2>(j)).ToList();
     }
 
-    //Even if we have iterationCount 1, BenchmarkDotNet will call the method twice, the first is in order to warm up the JIT
+    //Even if we have iterationCount 1, BenchmarkDotNet will call the method twice.
+    //The second time is not in the calculation, but is used to compute some monitoring values
+    //(look at Engine.GetExtraStats in BenchmarkDotNet repo).
     private void RegisterGeneratedSerializerIfNecessary()
     {
         if (!_setup)
