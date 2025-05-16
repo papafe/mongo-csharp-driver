@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>SourceGenerationBenchmarks.SerializationBenchmarksColdStart-20250514-155758</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.4.1 (24E263) [Darwin 24.4.0]
+Apple M1 Max, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.201
+  [Host]     : .NET 8.0.5 (8.0.524.21615), Arm64 RyuJIT AdvSIMD
+  Job-VCDDXH : .NET 8.0.5 (8.0.524.21615), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>IterationCount=1  LaunchCount=15  RunStrategy=ColdStart  
+WarmupCount=0  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                </th><th>CountDocuments</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>Deserialize_Binary_Base</td><td>100</td><td>8.767 ms</td><td>0.6945 ms</td><td>0.6496 ms</td><td>-</td><td>-</td><td>170.9 KB</td>
+</tr><tr><td>Deserialize_Binary_Base</td><td>1000</td><td>13.334 ms</td><td>0.4592 ms</td><td>0.4295 ms</td><td>-</td><td>-</td><td>1675.59 KB</td>
+</tr><tr><td>Deserialize_Binary_Base</td><td>10000</td><td>65.685 ms</td><td>2.2671 ms</td><td>2.1206 ms</td><td>2000.0000</td><td>1000.0000</td><td>16722.48 KB</td>
+</tr><tr><td>Deserialize_Binary_Generated</td><td>100</td><td>4.137 ms</td><td>0.1227 ms</td><td>0.1148 ms</td><td>-</td><td>-</td><td>136.7 KB</td>
+</tr><tr><td>Deserialize_Binary_Generated</td><td>1000</td><td>6.721 ms</td><td>0.3568 ms</td><td>0.3338 ms</td><td>-</td><td>-</td><td>1360.14 KB</td>
+</tr><tr><td>Deserialize_Binary_Generated</td><td>10000</td><td>38.496 ms</td><td>1.7052 ms</td><td>1.5950 ms</td><td>2000.0000</td><td>1000.0000</td><td>13594.52 KB</td>
+</tr><tr><td>Serialize_Binary_Base</td><td>100</td><td>2.048 ms</td><td>0.1294 ms</td><td>0.1211 ms</td><td>-</td><td>-</td><td>155.45 KB</td>
+</tr><tr><td>Serialize_Binary_Base</td><td>1000</td><td>10.345 ms</td><td>0.5779 ms</td><td>0.5406 ms</td><td>-</td><td>-</td><td>1547.64 KB</td>
+</tr><tr><td>Serialize_Binary_Base</td><td>10000</td><td>94.909 ms</td><td>4.9441 ms</td><td>4.6247 ms</td><td>2000.0000</td><td>1000.0000</td><td>15469.52 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>100</td><td>1.665 ms</td><td>0.0642 ms</td><td>0.0601 ms</td><td>-</td><td>-</td><td>125.84 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>1000</td><td>8.508 ms</td><td>0.2947 ms</td><td>0.2757 ms</td><td>-</td><td>-</td><td>1257.88 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>10000</td><td>79.857 ms</td><td>3.1838 ms</td><td>2.9781 ms</td><td>2000.0000</td><td>1000.0000</td><td>12578.19 KB</td>
+</tr></tbody></table>
+</body>
+</html>

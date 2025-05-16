@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>SourceGenerationBenchmarks.SerializationBenchmarksAOTwithColdStart-20250515-113032</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.4.1 (24E263) [Darwin 24.4.0]
+Apple M1 Max, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.201
+  [Host]     : .NET 8.0.5 (8.0.524.21615), Arm64 RyuJIT AdvSIMD
+  Job-GODMEM : .NET 8.0.14, Arm64 NativeAOT AdvSIMD
+</code></pre>
+<pre><code>Runtime=NativeAOT 8.0  IterationCount=1  LaunchCount=15  
+RunStrategy=ColdStart  WarmupCount=0  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                </th><th>CountDocuments</th><th>Mean </th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>Deserialize_Binary_Generated</td><td>100</td><td>113.7 &mu;s</td><td>7.47 &mu;s</td><td>6.99 &mu;s</td><td>-</td><td>-</td><td>136.36 KB</td>
+</tr><tr><td>Deserialize_Binary_Generated</td><td>1000</td><td>982.9 &mu;s</td><td>45.34 &mu;s</td><td>42.42 &mu;s</td><td>-</td><td>-</td><td>1359.8 KB</td>
+</tr><tr><td>Deserialize_Binary_Generated</td><td>10000</td><td>14,810.5 &mu;s</td><td>168.36 &mu;s</td><td>157.49 &mu;s</td><td>2000.0000</td><td>1000.0000</td><td>13594.17 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>100</td><td>114.3 &mu;s</td><td>4.09 &mu;s</td><td>3.83 &mu;s</td><td>-</td><td>-</td><td>125.5 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>1000</td><td>1,084.9 &mu;s</td><td>25.02 &mu;s</td><td>23.40 &mu;s</td><td>-</td><td>-</td><td>1257.53 KB</td>
+</tr><tr><td>Serialize_Binary_Generated</td><td>10000</td><td>13,226.2 &mu;s</td><td>114.39 &mu;s</td><td>107.00 &mu;s</td><td>2000.0000</td><td>1000.0000</td><td>12577.84 KB</td>
+</tr></tbody></table>
+</body>
+</html>
