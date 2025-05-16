@@ -26,7 +26,7 @@ public class BaseSerializationBenchmarks
     [Params(100, 1000, 10000)]
     public int CountDocuments;
 
-    protected List<TestDocument> _docs;
+    private List<TestDocument> _docs;
     protected List<TestDocument1> _docs1;
     protected List<TestDocument2> _docs2;
     protected List<TestDocument3> _docs3;
