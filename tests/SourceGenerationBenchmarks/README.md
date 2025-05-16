@@ -24,14 +24,14 @@ Each test was executed for three different input sizes: 100, 1,000, and 10,000 d
 
 ### 🔁 Source-Generated vs Baseline
 
-* **Deserialization** showed the largest gains: source-generated was \~40–50% faster and used \~20% less memory allocation across all input sizes.
+* **Deserialization** showed the largest gains: source-generated was \~30–50% faster and used \~20% less memory allocation across all input sizes.
 * **Serialization** gains were more modest but consistent: source-generated was \~15–30% faster and slightly leaner in memory use.
-* These improvements were more noticeable at lower document counts, where runtime overhead like reflection, expression compilation, and delegate caching has a proportionally larger impact.
+* These improvements were more noticeable at lower document counts.
 
 ### ❄️ Cold Start vs Classic Workload
 
 * Cold start workloads had a significant penalty in the baseline (JIT) version, with execution time increasing by 5–7× compared to the classic workload.
-* The source-generated version was much less affected by cold start conditions, with performance remaining close to the classic workload.
+* The source-generated version was much less affected by cold start conditions, and there is a greater difference with the baseline.
 
 ### ⚙️ AOT Observations
 
