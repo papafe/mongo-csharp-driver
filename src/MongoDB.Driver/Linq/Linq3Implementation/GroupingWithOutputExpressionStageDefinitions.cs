@@ -109,8 +109,8 @@ namespace MongoDB.Driver.Linq.Linq3Implementation
             var groupByTranslation = ExpressionToAggregationExpressionTranslator.TranslateLambdaBody(context, partiallyEvaluatedGroupBy, inputSerializer, asRoot: true);
 
             var valueSerializer = (IBsonSerializer<TValue>)groupByTranslation.Serializer;
-            var serializedBoundaries = SerializationHelper.SerializeValues(valueSerializer, _boundaries);
-            var serializedDefault = _options != null && _options.DefaultBucket.HasValue ? SerializationHelper.SerializeValue(valueSerializer, _options.DefaultBucket.Value) : null;
+            var serializedBoundaries = SerializationHelper.SerializeValues(context.SerializationDomain, valueSerializer, _boundaries);
+            var serializedDefault = _options != null && _options.DefaultBucket.HasValue ? SerializationHelper.SerializeValue(context.SerializationDomain, valueSerializer, _options.DefaultBucket.Value) : null;
             var pushElements = AstExpression.AccumulatorField("_elements", AstUnaryAccumulatorOperator.Push, AstExpression.RootVar);
             groupingOutputSerializer = IGroupingSerializer.Create(valueSerializer, inputSerializer);
 

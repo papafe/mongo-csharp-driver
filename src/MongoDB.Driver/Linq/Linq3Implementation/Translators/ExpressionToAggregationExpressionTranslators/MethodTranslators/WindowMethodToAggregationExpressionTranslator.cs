@@ -577,7 +577,7 @@ namespace MongoDB.Driver.Linq.Linq3Implementation.Translators.ExpressionToAggreg
                     }
                 }
 
-                return new AstWindow("range", lowerBoundary.Render(lowerBoundaryValueSerializer), upperBoundary.Render(upperBoundaryValueSerializer), unit);
+                return new AstWindow("range", lowerBoundary.Render(serializationDomain, lowerBoundaryValueSerializer), upperBoundary.Render(serializationDomain, upperBoundaryValueSerializer), unit);
             }
 
             throw new ArgumentException($"Invalid window type: {window.GetType().FullName}.");

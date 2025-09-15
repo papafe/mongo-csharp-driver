@@ -58,7 +58,7 @@ namespace MongoDB.Driver.Linq.Linq3Implementation.Translators.ExpressionToAggreg
 
                 if (serializer != null)
                 {
-                    var serializedValue = SerializationHelper.SerializeValue(serializer, value);
+                    var serializedValue = SerializationHelper.SerializeValue(context.SerializationDomain, serializer, value);
                     var ast = AstExpression.Constant(serializedValue);
                     return new TranslatedExpression(expression, ast, serializer);
                 }
