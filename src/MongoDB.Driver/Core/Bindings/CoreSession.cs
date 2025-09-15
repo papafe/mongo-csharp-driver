@@ -454,7 +454,7 @@ namespace MongoDB.Driver.Core.Bindings
         {
             var writeConcern = GetCommitTransactionWriteConcern(operationContext, isCommitRetry);
             var maxCommitTime = _currentTransaction.TransactionOptions.MaxCommitTime;
-            //QUESTION Is it correct we only need a default domain here?
+            //We only use BsonDocumentSerializer with the domain, so using the default one is fine.
             return new CommitTransactionOperation(_currentTransaction.RecoveryToken, writeConcern, BsonSerializer.DefaultSerializationDomain) { MaxCommitTime = maxCommitTime };
         }
 

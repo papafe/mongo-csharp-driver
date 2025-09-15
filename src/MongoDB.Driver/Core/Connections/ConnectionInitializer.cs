@@ -163,7 +163,7 @@ namespace MongoDB.Driver.Core.Connections
                 resultSerializer: BsonDocumentSerializer.Instance,
                 messageEncoderSettings: null,
                 serverApi: serverApi,
-                serializationDomain: BsonSerializer.DefaultSerializationDomain); //QUESTION Is it correct to use the default serialization domain here?
+                serializationDomain: BsonSerializer.DefaultSerializationDomain);
             return getLastErrorProtocol;
         }
 

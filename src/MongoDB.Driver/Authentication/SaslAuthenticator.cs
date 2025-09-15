@@ -257,7 +257,7 @@ namespace MongoDB.Driver.Authentication
                 resultSerializer: BsonDocumentSerializer.Instance,
                 messageEncoderSettings: null,
                 serverApi: _serverApi,
-                serializationDomain: BsonSerializer.DefaultSerializationDomain); //QUESTION Is it correct to use the default serialization domain here?
+                serializationDomain: BsonSerializer.DefaultSerializationDomain);
 
         private BsonDocument CreateStartCommand(byte[] bytesToSendToServer)
         {
