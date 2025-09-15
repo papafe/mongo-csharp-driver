@@ -29,9 +29,9 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
     {
         private readonly long? _maxSize;
         private readonly Dictionary<string, int> _nsInfos;
+        private readonly IBsonSerializationDomain _serializationDomain;
         private MemoryStream _nsInfoMemoryStream;
         private BsonBinaryWriter _nsInfoWriter;
-        private IBsonSerializationDomain _serializationDomain;
         private Dictionary<int, object> _idsMap;
         private int _currentIndex;
 

@@ -113,7 +113,7 @@ namespace MongoDB.Driver.Authentication
                 resultSerializer: BsonDocumentSerializer.Instance,
                 messageEncoderSettings: null,
                 serverApi: _serverApi,
-                serializationDomain: BsonSerializer.DefaultSerializationDomain); //QUESTION Is this correct? Using a default serialization domain?
+                serializationDomain: BsonSerializer.DefaultSerializationDomain);
 
             return protocol;
         }

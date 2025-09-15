@@ -156,7 +156,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         {
             if (fields != null)
             {
-                //QUESTION Is it correct we only need a default domain here?
                 var context = BsonSerializationContext.CreateRoot(binaryWriter, BsonSerializer.DefaultSerializationDomain);
                 BsonDocumentSerializer.Instance.Serialize(context, fields);
             }
