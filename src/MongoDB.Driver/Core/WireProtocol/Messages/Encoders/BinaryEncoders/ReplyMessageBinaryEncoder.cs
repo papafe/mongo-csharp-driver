@@ -28,12 +28,14 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
     {
         // fields
         private readonly IBsonSerializer<TDocument> _serializer;
+        private readonly IBsonSerializationDomain _serializationDomain;
 
         // constructors
         public ReplyMessageBinaryEncoder(Stream stream, MessageEncoderSettings encoderSettings, IBsonSerializer<TDocument> serializer)
             : base(stream, encoderSettings)
         {
             _serializer = Ensure.IsNotNull(serializer, nameof(serializer));
+            _serializationDomain = encoderSettings?.GetOrDefault<IBsonSerializationDomain>(MessageEncoderSettingsName.SerializationDomain, null) ?? BsonSerializer.DefaultSerializationDomain;
         }
 
         // methods
@@ -124,16 +126,14 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             stream.WriteInt32(message.NumberReturned);
             if (message.QueryFailure)
             {
-                //QUESTION Is it correct we only need a default domain here?
-                var context = BsonSerializationContext.CreateRoot(binaryWriter, BsonSerializer.DefaultSerializationDomain);
+                var context = BsonSerializationContext.CreateRoot(binaryWriter, _serializationDomain);
                 _serializer.Serialize(context, message.QueryFailureDocument);
             }
             else
             {
                 foreach (var doc in message.Documents)
                 {
-                    //QUESTION Is it correct we only need a default domain here?
-                    var context = BsonSerializationContext.CreateRoot(binaryWriter, BsonSerializer.DefaultSerializationDomain);
+                    var context = BsonSerializationContext.CreateRoot(binaryWriter, _serializationDomain);
                     _serializer.Serialize(context, doc);
                 }
             }

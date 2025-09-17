@@ -25,10 +25,13 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
 {
     internal sealed class QueryMessageBinaryEncoder : MessageBinaryEncoderBase, IMessageEncoder
     {
+        private readonly IBsonSerializationDomain _serializationDomain;
+
         // constructors
         public QueryMessageBinaryEncoder(Stream stream, MessageEncoderSettings encoderSettings)
             : base(stream, encoderSettings)
         {
+            _serializationDomain = encoderSettings?.GetOrDefault<IBsonSerializationDomain>(MessageEncoderSettingsName.SerializationDomain, null) ?? BsonSerializer.DefaultSerializationDomain;
         }
 
         // methods
@@ -169,8 +172,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             binaryWriter.PushElementNameValidator(queryValidator);
             try
             {
-                //QUESTION Is it correct we only need a default domain here?
-                var context = BsonSerializationContext.CreateRoot(binaryWriter, BsonSerializer.DefaultSerializationDomain);
+                var context = BsonSerializationContext.CreateRoot(binaryWriter, _serializationDomain);
                 BsonDocumentSerializer.Instance.Serialize(context, query ?? new BsonDocument());
             }
             finally

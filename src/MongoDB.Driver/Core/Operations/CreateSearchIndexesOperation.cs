@@ -37,7 +37,6 @@ namespace MongoDB.Driver.Core.Operations
         private readonly IEnumerable<CreateSearchIndexRequest> _requests;
         private readonly IBsonSerializationDomain _serializationDomain;
 
-        //FP We should remove all the docs in those internal classes, at least for constructors.
         // constructors
         /// <summary>
         /// Initializes a new instance of the <see cref="CreateIndexesOperation"/> class.

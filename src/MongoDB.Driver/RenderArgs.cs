@@ -55,7 +55,7 @@ namespace MongoDB.Driver
             IBsonSerializer<TDocument> documentSerializer,
             IBsonSerializerRegistry serializerRegistry,
             PathRenderArgs pathRenderArgs = default,
-            bool renderDollarForm = default,
+            bool renderDollarForm = false,
             bool renderForFind = false,
             bool renderForElemMatch = false,
             ExpressionTranslationOptions translationOptions = null)
@@ -84,7 +84,7 @@ namespace MongoDB.Driver
             IBsonSerializer<TDocument> documentSerializer,
             IBsonSerializationDomain serializationDomain,
             PathRenderArgs pathRenderArgs = default,
-            bool renderDollarForm = default,
+            bool renderDollarForm = false,
             bool renderForFind = false,
             bool renderForElemMatch = false,
             ExpressionTranslationOptions translationOptions = null)
@@ -131,7 +131,7 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets the serializer registry.
         /// </summary>
-        public readonly IBsonSerializerRegistry SerializerRegistry  //TODO: we should probably remove this property
+        public readonly IBsonSerializerRegistry SerializerRegistry  //DOMAIN-API: we should probably remove this property and use the domain directly
         {
             get => _serializerRegistry;
             init => _serializerRegistry = Ensure.IsNotNull(value, nameof(value));

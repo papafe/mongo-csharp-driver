@@ -568,7 +568,7 @@ namespace MongoDB.Driver
                     {
                         outputSerializer = (IBsonSerializer<TOutput>)new AggregateFacetResultsSerializer(
                             materializedFacets.Select(f => f.Name),
-                            materializedFacets.Select(f => f.OutputSerializer ?? args.SerializerRegistry.GetSerializer(f.OutputType)));  //QUESTION What do we do? Do we delay the setting of the serializer..?
+                            materializedFacets.Select(f => f.OutputSerializer ?? args.SerializerRegistry.GetSerializer(f.OutputType)));
                     }
                     else
                     {
