@@ -198,10 +198,8 @@ namespace MongoDB.Driver.Tests
             AssertDerivedPerson2(bp2, retrievedDerivedPerson2);
 
             //AppendStage with OfType
-            retrievedDerivedPerson1 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePerson, DerivedPerson1>())
-                .OfType<DerivedPerson1>().Single();
-            retrievedDerivedPerson2 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePerson, DerivedPerson2>())
-                .OfType<DerivedPerson2>().Single();
+            retrievedDerivedPerson1 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePerson, DerivedPerson1>()).Single();
+            retrievedDerivedPerson2 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePerson, DerivedPerson2>()).Single();
 
             AssertDerivedPerson1(bp1, retrievedDerivedPerson1);
             AssertDerivedPerson2(bp2, retrievedDerivedPerson2);
