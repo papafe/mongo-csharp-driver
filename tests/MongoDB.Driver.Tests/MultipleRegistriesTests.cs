@@ -28,26 +28,29 @@ namespace MongoDB.Driver.Tests
     [Trait("Category", "Integration")]
     public class MultipleRegistriesTests
     {
+        private readonly string _defaultObjectIdString = "6797b56bf5495bf53aa3078f";
+        private readonly ObjectId _defaultId = ObjectId.Parse("6797b56bf5495bf53aa3078f");
+
         [Fact]
         public void TestSerialization()
         {
             RequireServer.Check();
 
-            // {
-            //     var client = CreateClient();
-            //     var collection = GetTypedCollection<Person>(client);
-            //     var bsonCollection = GetUntypedCollection(client);
-            //
-            //     var person = new Person { Id = ObjectId.Parse("6797b56bf5495bf53aa3078f"), Name = "Mario", Age = 24 };
-            //     collection.InsertOne(person);
-            //
-            //     var retrieved = bsonCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList().Single();
-            //     var toString = retrieved.ToString();
-            //
-            //     var expectedVal =
-            //         """{ "_id" : { "$oid" : "6797b56bf5495bf53aa3078f" }, "Name" : "Mario", "Age" : 24 }""";
-            //     Assert.Equal(expectedVal, toString);
-            // }
+            {
+                var client = CreateClient();
+                var collection = GetTypedCollection<Person>(client);
+                var bsonCollection = GetUntypedCollection(client);
+
+                var person = new Person { Id = _defaultId, Name = "Mario", Age = 24 };
+                collection.InsertOne(person);
+
+                var retrieved = bsonCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList().Single();
+                var toString = retrieved.ToString();
+
+                var expectedVal =
+                    $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mario", "Age" : 24 }""";
+                Assert.Equal(expectedVal, toString);
+            }
 
             //The first section demonstrates that the class maps are also separated
             {
@@ -58,14 +61,14 @@ namespace MongoDB.Driver.Tests
                 var collection = GetTypedCollection<Person>(client);
                 var bsonCollection = GetUntypedCollection(client);
 
-                var person = new Person { Id = ObjectId.Parse("6797b56bf5495bf53aa3078f"), Name = "Mario", Age = 24 };
+                var person = new Person { Id = _defaultId, Name = "Mario", Age = 24 };
                 collection.InsertOne(person);
 
                 var retrievedAsBson = bsonCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList().Single();
                 var toString = retrievedAsBson.ToString();
 
                 var expectedVal =
-                    """{ "_id" : { "$oid" : "6797b56bf5495bf53aa3078f" }, "Name" : "Mariotest", "Age" : 24 }""";
+                    $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mariotest", "Age" : 24 }""";
                 Assert.Equal(expectedVal, toString);
 
                 var retrievedTyped = collection.FindSync(FilterDefinition<Person>.Empty).ToList().Single();
@@ -82,7 +85,7 @@ namespace MongoDB.Driver.Tests
                 var client = CreateClient();
                 var collection = GetTypedCollection<Person1>(client);
 
-                var person = new Person1 { Id = ObjectId.Parse("6797b56bf5495bf53aa3078f"), Name = "Mariotest", Age = 24 };
+                var person = new Person1 { Id = _defaultId, Name = "Mariotest", Age = 24 };
                 collection.InsertOne(person);
             }
 
@@ -110,14 +113,14 @@ namespace MongoDB.Driver.Tests
             var collection = GetTypedCollection<Person>(client);
             var untypedCollection = GetUntypedCollection(client);
 
-            var person = new Person { Id = ObjectId.Parse("6797b56bf5495bf53aa3078f"), Name = "Mario", Age = 24 };
+            var person = new Person { Id = _defaultId, Name = "Mario", Age = 24 };
             collection.InsertOne(person);
 
             var retrievedAsBson = untypedCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList().Single();
             var toString = retrievedAsBson.ToString();
 
             var expectedVal =
-                """{ "_id" : { "$oid" : "6797b56bf5495bf53aa3078f" }, "Name" : "Mariotest", "Age" : 24 }""";
+                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mariotest", "Age" : 24 }""";
             Assert.Equal(expectedVal, toString);
 
             var retrievedTyped = collection.AsQueryable().Where(x => x.Name == "Mario").ToList();  //The string serializer is correctly serializing "Mario" to "Mariotest"
@@ -152,7 +155,7 @@ namespace MongoDB.Driver.Tests
             var toString = retrievedAsBson.ToString();
 
             var expectedVal =
-                """{ "_id" : { "$oid" : "6797b56bf5495bf53aa3078f" }, "name" : "Mario", "age" : 24 }""";
+                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mario", "Age" : 24 }""";
             Assert.Equal(expectedVal, toString);
         }
 
@@ -314,7 +317,9 @@ namespace MongoDB.Driver.Tests
         }
 
 
-        public class CustomStringSerializer : SealedClassSerializerBase<string> //This serializer just adds "test" to any serialised string
+        // This serializer adds the _appended variable to any serialised string
+        public class CustomStringSerializer(string appended = "test")
+            : SealedClassSerializerBase<string>
         {
             /// <inheritdoc/>
             public override int GetHashCode() => 0;
@@ -326,16 +331,15 @@ namespace MongoDB.Driver.Tests
                 var bsonType = bsonReader.GetCurrentBsonType();
                 return bsonType switch
                 {
-                    BsonType.String => bsonReader.ReadString().Replace("test", ""),
+                    BsonType.String => bsonReader.ReadString().Replace(appended, ""),
                     _ => throw CreateCannotDeserializeFromBsonTypeException(bsonType)
                 };
             }
 
-            protected override void SerializeValue(BsonSerializationContext context, BsonSerializationArgs args,
-                string value)
+            protected override void SerializeValue(BsonSerializationContext context, BsonSerializationArgs args, string value)
             {
                 var bsonWriter = context.Writer;
-                bsonWriter.WriteString(value + "test");
+                bsonWriter.WriteString(value + appended);
             }
         }
 
@@ -343,7 +347,7 @@ namespace MongoDB.Driver.Tests
         {
             public object GenerateId(object container, object document)
             {
-                return ObjectId.Parse("6797b56bf5495bf53aa3078f");
+                return  ObjectId.Parse("6797b56bf5495bf53aa3078f");
             }
 
             public bool IsEmpty(object id)
