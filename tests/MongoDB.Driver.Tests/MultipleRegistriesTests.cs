@@ -36,6 +36,7 @@ namespace MongoDB.Driver.Tests
         {
             RequireServer.Check();
 
+            // The first section demonstrates that the class maps are also separated
             {
                 var client = CreateClient();
                 var collection = GetTypedCollection<Person>(client);
@@ -52,10 +53,9 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(expectedVal, toString);
             }
 
-            //The first section demonstrates that the class maps are also separated
             {
                 var customDomain = BsonSerializer.CreateSerializationDomain();
-                customDomain.RegisterSerializer(new CustomStringSerializer());
+                customDomain.RegisterSerializer(new CustomStringSerializer("test1"));
 
                 var client = CreateClientWithDomain(customDomain);
                 var collection = GetTypedCollection<Person>(client);
@@ -68,12 +68,71 @@ namespace MongoDB.Driver.Tests
                 var toString = retrievedAsBson.ToString();
 
                 var expectedVal =
-                    $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mariotest", "Age" : 24 }""";
+                    $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mariotest1", "Age" : 24 }""";
                 Assert.Equal(expectedVal, toString);
 
                 var retrievedTyped = collection.FindSync(FilterDefinition<Person>.Empty).ToList().Single();
                 Assert.Equal("Mario", retrievedTyped.Name);
             }
+
+            {
+                var customDomain = BsonSerializer.CreateSerializationDomain();
+                customDomain.RegisterSerializer(new CustomStringSerializer("test2"));
+
+                var client = CreateClientWithDomain(customDomain);
+                var collection = GetTypedCollection<Person>(client);
+                var bsonCollection = GetUntypedCollection(client);
+
+                var person = new Person { Id = _defaultId, Name = "Mario", Age = 24 };
+                collection.InsertOne(person);
+
+                var retrievedAsBson = bsonCollection.FindSync(FilterDefinition<BsonDocument>.Empty).ToList().Single();
+                var toString = retrievedAsBson.ToString();
+
+                var expectedVal =
+                    $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mariotest2", "Age" : 24 }""";
+                Assert.Equal(expectedVal, toString);
+
+                var retrievedTyped = collection.FindSync(FilterDefinition<Person>.Empty).ToList().Single();
+                Assert.Equal("Mario", retrievedTyped.Name);
+            }
+        }
+
+        [Fact]
+        public void TestMultipleDomainSimultaneously()
+        {
+            RequireServer.Check();
+
+            var objectId1 = ObjectId.GenerateNewId();
+            var objectId2 = ObjectId.GenerateNewId();
+
+            var client = CreateClient();
+            var collection = GetTypedCollection<Person>(client);
+            var bsonCollection = GetUntypedCollection(client);
+
+            var customDomain = BsonSerializer.CreateSerializationDomain();
+            customDomain.RegisterSerializer(new CustomStringSerializer("test1"));
+            var client2 = CreateClientWithDomain(customDomain);
+            var collection2 = GetTypedCollection<Person>(client2);
+            var bsonCollection2 = GetUntypedCollection(client2);
+
+            var person = new Person { Id = objectId1, Name = "Mario", Age = 24 };
+            var person2 = new Person { Id = objectId2, Name = "Mario", Age = 24 };
+            collection.InsertOne(person);
+            collection2.InsertOne(person2);
+
+            var retrieved = bsonCollection.FindSync(Builders<BsonDocument>.Filter.Eq("_id", objectId1)).ToList().Single();
+            var expectedVal =
+                $$"""{ "_id" : { "$oid" : "{{objectId1.ToString()}}" }, "Name" : "Mario", "Age" : 24 }""";
+            Assert.Equal(expectedVal, retrieved.ToString());
+
+            var retrievedAsBson = bsonCollection2.FindSync(Builders<BsonDocument>.Filter.Eq("_id", objectId2)).ToList().Single();
+            var expectedVal2 =
+                $$"""{ "_id" : { "$oid" : "{{objectId2.ToString()}}" }, "Name" : "Mariotest1", "Age" : 24 }""";
+            Assert.Equal(expectedVal2, retrievedAsBson.ToString());
+
+            var retrievedTyped = collection2.FindSync(p => p.Id == objectId2).ToList().Single();
+            Assert.Equal("Mario", retrievedTyped.Name);
         }
 
         [Fact]
@@ -155,7 +214,7 @@ namespace MongoDB.Driver.Tests
             var toString = retrievedAsBson.ToString();
 
             var expectedVal =
-                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "Name" : "Mario", "Age" : 24 }""";
+                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "name" : "Mario", "Age" : 24 }""";
             Assert.Equal(expectedVal, toString);
         }
 
