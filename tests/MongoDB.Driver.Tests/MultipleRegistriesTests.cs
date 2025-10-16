@@ -214,7 +214,7 @@ namespace MongoDB.Driver.Tests
             var toString = retrievedAsBson.ToString();
 
             var expectedVal =
-                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "name" : "Mario", "Age" : 24 }""";
+                $$"""{ "_id" : { "$oid" : "{{_defaultObjectIdString}}" }, "name" : "Mario", "age" : 24 }""";
             Assert.Equal(expectedVal, toString);
         }
 
