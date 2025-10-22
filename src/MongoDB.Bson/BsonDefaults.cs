@@ -13,9 +13,6 @@
 * limitations under the License.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Dynamic;
 using MongoDB.Bson.Serialization;
 namespace MongoDB.Bson
 {
@@ -43,9 +40,9 @@ namespace MongoDB.Bson
             set => BsonSerializer.DefaultSerializationDomain.BsonDefaults.DynamicDocumentSerializer = value;
         }
 
-        /* DOMAIN-API We should modify the API to have those two values (and in the writer/reader settings where they are used) be nullable.
-         * The problem is that we need to now when these values have been set externally or not. If they have not, then they should
-         * be retrieved from the closest domain.
+        /* DOMAIN-API DynamicSerializer are used only in a handful of serializers, so they should be removed from here (and possibly from the public API altogether).
+         * MaxDocumentSize should probably be removed from the public API too, as it should come from the server.
+         * MaxSerializationDepeth is definitely usedful. Does it make sense to keep it global...?
          */
 
         /// <summary>

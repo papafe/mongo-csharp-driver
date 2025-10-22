@@ -228,6 +228,7 @@ namespace MongoDB.Driver.Tests
             customDomain.BsonClassMap.RegisterClassMap<BasePerson>(cm =>
             {
                 cm.AutoMap();
+                cm.SetDiscriminator("bp");
                 cm.SetIsRootClass(true);
             });
 
@@ -247,10 +248,21 @@ namespace MongoDB.Driver.Tests
 
             var client = CreateClientWithDomain(customDomain);
             var collection = GetTypedCollection<BasePerson>(client);
+            var untypedCollection = GetUntypedCollection(client);
 
             var bp1 = new DerivedPerson1 { Name = "Alice", Age = 30, ExtraField1 = "Field1" };
             var bp2 = new DerivedPerson2 { Name = "Bob", Age = 40, ExtraField2 = "Field2" };
-            collection.InsertMany(new BasePerson[] { bp1, bp2 });
+            collection.InsertMany([bp1, bp2]);
+
+            var retrieved1 = untypedCollection.FindSync(Builders<BsonDocument>.Filter.Eq("_id", bp1.Id)).ToList().Single();
+            var retrieved2 = untypedCollection.FindSync(Builders<BsonDocument>.Filter.Eq("_id", bp2.Id)).ToList().Single();
+
+            var expectedDiscriminator1 =
+                $"""_t" : ["bp", "dp1"]""";
+            var expectedDiscriminator2 =
+                $"""_t" : ["bp", "dp2"]""";
+            Assert.Contains(expectedDiscriminator1, retrieved1.ToString());
+            Assert.Contains(expectedDiscriminator2, retrieved2.ToString());
 
             //Aggregate with OfType
             var retrievedDerivedPerson1 = collection.Aggregate().OfType<DerivedPerson1>().Single();
@@ -317,6 +329,74 @@ namespace MongoDB.Driver.Tests
             }
         }
 
+        [Fact]
+        public void TestDiscriminatorsWithAttributes()
+        {
+            RequireServer.Check();
+
+            var customDomain = BsonSerializer.CreateSerializationDomain();
+            customDomain.RegisterSerializer(new CustomStringSerializer());
+
+            var client = CreateClientWithDomain(customDomain);
+            var collection = GetTypedCollection<BasePersonAttribute>(client);
+            var untypedCollection = GetUntypedCollection(client);
+
+            var bp1 = new DerivedPersonAttribute1 { Name = "Alice", Age = 30, ExtraField1 = "Field1" };
+            var bp2 = new DerivedPersonAttribute2 { Name = "Bob", Age = 40, ExtraField2 = "Field2" };
+            collection.InsertMany([bp1, bp2]);
+
+            var retrieved1 = untypedCollection.FindSync(Builders<BsonDocument>.Filter.Eq("_id", bp1.Id)).ToList().Single();
+            var retrieved2 = untypedCollection.FindSync(Builders<BsonDocument>.Filter.Eq("_id", bp2.Id)).ToList().Single();
+
+            var expectedDiscriminator1 =
+                $"""_t" : ["bp", "dp1"]""";
+            var expectedDiscriminator2 =
+                $"""_t" : ["bp", "dp2"]""";
+            Assert.Contains(expectedDiscriminator1, retrieved1.ToString());
+            Assert.Contains(expectedDiscriminator2, retrieved2.ToString());
+
+            //Aggregate with OfType
+            var retrievedDerivedPerson1 = collection.Aggregate().OfType<DerivedPersonAttribute1>().Single();
+            var retrievedDerivedPerson2 = collection.Aggregate().OfType<DerivedPersonAttribute2>().Single();
+
+            AssertDerivedPerson1(bp1, retrievedDerivedPerson1);
+            AssertDerivedPerson2(bp2, retrievedDerivedPerson2);
+
+            //AppendStage with OfType
+            retrievedDerivedPerson1 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePersonAttribute, DerivedPersonAttribute1>()).Single();
+            retrievedDerivedPerson2 = collection.AsQueryable().AppendStage(PipelineStageDefinitionBuilder.OfType<BasePersonAttribute, DerivedPersonAttribute2>()).Single();
+
+            AssertDerivedPerson1(bp1, retrievedDerivedPerson1);
+            AssertDerivedPerson2(bp2, retrievedDerivedPerson2);
+
+            //LINQ with OfType
+            retrievedDerivedPerson1 = collection.AsQueryable().OfType<DerivedPersonAttribute1>().Single();
+            retrievedDerivedPerson2 = collection.AsQueryable().OfType<DerivedPersonAttribute2>().Single();
+
+            AssertDerivedPerson1(bp1, retrievedDerivedPerson1);
+            AssertDerivedPerson2(bp2, retrievedDerivedPerson2);
+
+
+            void AssertDerivedPerson1(DerivedPersonAttribute1 expected, DerivedPersonAttribute1 retrieved)
+            {
+                AssertBasePerson(expected, retrieved);
+                Assert.Equal(expected.ExtraField1, retrieved.ExtraField1);
+            }
+
+            void AssertDerivedPerson2(DerivedPersonAttribute2 expected, DerivedPersonAttribute2 retrieved)
+            {
+                AssertBasePerson(expected, retrieved);
+                Assert.Equal(expected.ExtraField2, retrieved.ExtraField2);
+            }
+
+            void AssertBasePerson(BasePersonAttribute expected, BasePersonAttribute retrieved)
+            {
+                Assert.Equal(expected.Id, retrieved.Id);
+                Assert.Equal(expected.Name, retrieved.Name);
+                Assert.Equal(expected.Age, retrieved.Age);
+            }
+        }
+
         private static IMongoCollection<T> GetTypedCollection<T>(IMongoClient client) =>
             client.GetDatabase(DriverTestConfiguration.DatabaseNamespace.DatabaseName)
                 .GetCollection<T>(DriverTestConfiguration.CollectionNamespace.CollectionName);
@@ -375,6 +455,25 @@ namespace MongoDB.Driver.Tests
             public string ExtraField2 { get; set; }
         }
 
+        [BsonDiscriminator("bp", RootClass = true)]
+        public class BasePersonAttribute
+        {
+            [BsonId] public ObjectId Id { get; set; } = ObjectId.GenerateNewId();
+            public string Name { get; set; }
+            public int Age { get; set; }
+        }
+
+        [BsonDiscriminator("dp1")]
+        public class DerivedPersonAttribute1 : BasePersonAttribute
+        {
+            public string ExtraField1 { get; set; }
+        }
+
+        [BsonDiscriminator("dp2")]
+        public class DerivedPersonAttribute2 : BasePersonAttribute
+        {
+            public string ExtraField2 { get; set; }
+        }
 
         // This serializer adds the _appended variable to any serialised string
         public class CustomStringSerializer(string appended = "test")
