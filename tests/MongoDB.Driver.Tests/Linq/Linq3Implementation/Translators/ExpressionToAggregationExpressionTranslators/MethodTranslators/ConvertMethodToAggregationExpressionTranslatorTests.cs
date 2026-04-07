@@ -500,6 +500,52 @@ namespace MongoDB.Driver.Tests.Linq.Linq3Implementation.Translators.ExpressionTo
             AssertOutcome(collection, queryable, expectedStages, expectedValue);
         }
 
+        [Theory]
+        [InlineData(22, 2, "100001")]
+        [InlineData(22, 8, "41")]
+        [InlineData(22, 16, "21")]
+        public void Convert_to_string_with_base_should_work(int id, int @base, string expectedResult)
+        {
+            RequireServer.Check().Supports(Feature.ConvertOperatorBaseConversion);
+
+            var collection = Fixture.Collection;
+            var queryable = collection.AsQueryable()
+                .Where(x => x.Id == id)
+                .Select(x => Mql.Convert(x.IntProperty, new ConvertOptions<string> { Base = @base }));
+
+            var expectedStages =
+                new[]
+                {
+                    $"{{ $match : {{ _id : {id} }} }}",
+                    $"{{ $project: {{ _v : {{ $convert : {{ input : '$IntProperty', to : 'string', base : {@base} }} }}, _id : 0 }} }}",
+                };
+
+            AssertOutcome(collection, queryable, expectedStages, expectedResult);
+        }
+
+        [Theory]
+        [InlineData(25, 2, 10)]
+        [InlineData(26, 8, 42)]
+        [InlineData(27, 16, 255)]
+        public void Convert_to_int_with_base_should_work(int id, int @base, int expectedResult)
+        {
+            RequireServer.Check().Supports(Feature.ConvertOperatorBaseConversion);
+
+            var collection = Fixture.Collection;
+            var queryable = collection.AsQueryable()
+                .Where(x => x.Id == id)
+                .Select(x => Mql.Convert(x.StringProperty, new ConvertOptions<int> { Base = @base }));
+
+            var expectedStages =
+                new[]
+                {
+                    $"{{ $match : {{ _id : {id} }} }}",
+                    $"{{ $project: {{ _v : {{ $convert : {{ input : '$StringProperty', to : 'int', base : {@base} }} }}, _id : 0 }} }}",
+                };
+
+            AssertOutcome(collection, queryable, expectedStages, expectedResult);
+        }
+
         [Fact]
         public void Convert_should_throw_when_using_unrecognized_to_type()
         {
@@ -568,6 +614,9 @@ namespace MongoDB.Driver.Tests.Linq.Linq3Implementation.Translators.ExpressionTo
                 BsonDocument.Parse("{ _id : 22, IntProperty: 33 }"),
                 BsonDocument.Parse("{ _id : 23, StringProperty: '2018-03-03' }"),
                 BsonDocument.Parse("{ _id : 24, StringProperty: '5ab9cbfa31c2ab715d42129e' }"),
+                BsonDocument.Parse("{ _id : 25, StringProperty: '1010' }"),
+                BsonDocument.Parse("{ _id : 26, StringProperty: '52' }"),
+                BsonDocument.Parse("{ _id : 27, StringProperty: 'ff' }"),
             ];
         }
 
