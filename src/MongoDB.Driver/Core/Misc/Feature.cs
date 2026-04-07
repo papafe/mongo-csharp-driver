@@ -44,6 +44,7 @@ namespace MongoDB.Driver.Core.Misc
         private static readonly Feature __clientBulkWrite = new Feature("ClientBulkWrite", WireVersion.Server80);
         private static readonly Feature __clientSideEncryption = new Feature("ClientSideEncryption", WireVersion.Server42);
         private static readonly Feature __clusteredIndexes = new Feature("ClusteredIndexes", WireVersion.Server53);
+        private static readonly Feature __convertOperatorAnyToString = new Feature("ConvertOperatorAnyToString", WireVersion.Server83);
         private static readonly Feature __convertOperatorBinDataToFromNumeric = new Feature("ConvertOperatorBinDataToFromNumeric", WireVersion.Server81);
         private static readonly Feature __convertOperatorBinDataToFromString= new Feature("ConvertOperatorBinDataToFromString", WireVersion.Server80);
         private static readonly Feature __createIndexCommitQuorum = new Feature("CreateIndexCommitQuorum", WireVersion.Server44);
@@ -201,6 +202,11 @@ namespace MongoDB.Driver.Core.Misc
         /// Gets the clustered indexes feature.
         /// </summary>
         public static Feature ClusteredIndexes => __clusteredIndexes;
+
+        /// <summary>
+        /// Gets the conversion of any type to string feature.
+        /// </summary>
+        public static Feature ConvertOperatorAnyToString => __convertOperatorAnyToString;
 
         /// <summary>
         /// Gets the conversion of binary data to/from numeric types feature.
