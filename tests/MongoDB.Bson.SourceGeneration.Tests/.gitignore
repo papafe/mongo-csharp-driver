@@ -1,0 +1,2 @@
+# Roslyn source generator output (EmitCompilerGeneratedFiles writes here on every build).
+Generated/

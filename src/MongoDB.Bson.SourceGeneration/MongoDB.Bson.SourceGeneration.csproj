@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <CodeAnalysisRuleSet>..\..\MongoDB.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AssemblyTitle>MongoDB.Bson.SourceGeneration</AssemblyTitle>
+    <Product>MongoDB.Bson.SourceGeneration</Product>
+    <PackageId>MongoDB.Bson.SourceGeneration</PackageId>
+    <Description>Pre-release source-generated BSON serialization for the MongoDB C# driver. API may change between alpha/beta releases. See https://www.mongodb.com/docs/drivers/csharp/ for more details.</Description>
+    <PackageDescription>Pre-release source-generated BSON serialization for the MongoDB C# driver. API may change.</PackageDescription>
+    <PackageTags>$(PackageTags);bson;source-generator;aot</PackageTags>
+    <IsPackable>true</IsPackable>
+    <!-- Clear PackageReadmeFile inherited from src/Directory.Build.props; the driver-wide README isn't
+         relevant for this pre-release source-gen package. A source-gen-specific README ships in ticket #9. -->
+    <PackageReadmeFile></PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Undo the driver-wide README include from src/Directory.Build.props. -->
+    <None Remove="..\..\README.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MongoDB.Bson\MongoDB.Bson.csproj" />
+
+    <!-- Generator is referenced so it runs in this project's own build AND so the
+         build of this project triggers the generator's build (project-reference
+         order). The generator's DLL is added to the nupkg via the None item below;
+         we don't want a regular assembly reference to it. -->
+    <ProjectReference Include="..\MongoDB.Bson.SourceGeneration.Generator\MongoDB.Bson.SourceGeneration.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pack the generator DLL into analyzers/dotnet/cs/ inside our nupkg. Roslyn
+         picks it up automatically on the consumer side from that conventional path. -->
+    <None Include="..\MongoDB.Bson.SourceGeneration.Generator\bin\$(Configuration)\netstandard2.0\MongoDB.Bson.SourceGeneration.Generator.dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs/"
+          Visible="false"
+          Condition="Exists('..\MongoDB.Bson.SourceGeneration.Generator\bin\$(Configuration)\netstandard2.0\MongoDB.Bson.SourceGeneration.Generator.dll')" />
+  </ItemGroup>
+
+</Project>

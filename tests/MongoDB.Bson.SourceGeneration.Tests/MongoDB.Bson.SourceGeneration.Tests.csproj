@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\BuildProps\Tests.Build.props" />
+
+  <PropertyGroup>
+    <CodeAnalysisRuleSet>..\..\MongoDBTest.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AssemblyTitle>MongoDB.Bson.SourceGeneration.Tests</AssemblyTitle>
+    <Product>MongoDB.Bson.SourceGeneration.Tests</Product>
+    <Description>Integration tests for MongoDB.Bson.SourceGeneration: hand-emitted reference serializers, four-way parity vs. BsonClassMapSerializer, and end-to-end round trips.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MongoDB.Bson\MongoDB.Bson.csproj" />
+    <ProjectReference Include="..\..\src\MongoDB.Bson.SourceGeneration\MongoDB.Bson.SourceGeneration.csproj" />
+
+    <!-- Load the generator as a Roslyn analyzer so its output lands in this project's compilation. -->
+    <ProjectReference Include="..\..\src\MongoDB.Bson.SourceGeneration.Generator\MongoDB.Bson.SourceGeneration.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Write generator output to disk so we can inspect what the pipeline produces. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Generated files land in Generated/ but we don't want them re-compiled (they're already in the in-memory compilation). -->
+    <Compile Remove="Generated/**/*.cs" />
+    <None Include="Generated/**/*.cs" />
+  </ItemGroup>
+
+</Project>
