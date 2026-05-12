@@ -37,6 +37,9 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(Animal))]
     [BsonSerializable(typeof(Cat))]
     [BsonSerializable(typeof(Dog))]
+    [BsonSerializable(typeof(PersonRecord))]
+    [BsonSerializable(typeof(AccountProfile))]
+    [BsonSerializable(typeof(AppSettings))]
     public partial class TestContext : BsonSerializerContext
     {
     }

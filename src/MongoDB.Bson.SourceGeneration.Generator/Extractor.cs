@@ -105,15 +105,20 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                     ITypeSymbol? memberType = null;
                     var memberName = member.Name;
                     var isField = false;
+                    var isInitOnly = false;
+                    var isRequired = false;
 
                     switch (member)
                     {
                         case IPropertySymbol p when p.GetMethod is not null && p.SetMethod is not null:
                             memberType = p.Type;
+                            isInitOnly = p.SetMethod.IsInitOnly;
+                            isRequired = p.IsRequired;
                             break;
                         case IFieldSymbol f when !f.IsConst && !f.IsReadOnly:
                             memberType = f.Type;
                             isField = true;
+                            isRequired = f.IsRequired;
                             break;
                         default:
                             continue;
@@ -149,7 +154,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                         Required: HasAttribute(member, attrs.Required),
                         DefaultValueExpression: defaultValueExpr,
                         RepresentationBsonType: representation,
-                        CustomSerializerTypeFullName: customSerializerType);
+                        CustomSerializerTypeFullName: customSerializerType,
+                        IsInitOnly: isInitOnly,
+                        IsRequired: isRequired);
 
                     (isField ? fields : properties).Add(emitted);
                 }
@@ -171,6 +178,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             var hasRootAncestor = HasRootAncestor(type, attrs);
             var knownTypes = ExtractKnownTypeFullNames(type, attrs);
 
+            var ctorResult = DetermineConstructionStrategy(type);
+            if (ctorResult is null) { return null; }
+
             return new TypeToGenerate(
                 TypeFullName: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 TypeShortName: type.Name,
@@ -180,7 +190,60 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 Discriminator: discriminator ?? type.Name,
                 WriteDiscriminatorWhenSelf: isRootClass || discriminatorRequired || hasRootAncestor,
                 KnownTypeFullNames: knownTypes,
+                ConstructionStrategy: ctorResult.Value.Strategy,
+                ConstructorParameters: ctorResult.Value.Parameters,
                 Members: new EquatableArray<MemberToGenerate>(members.ToImmutable()));
+        }
+
+        // Mirrors what `BsonClassMap` chooses today (`BsonClassMap.cs:1432-1452`):
+        //   1. Public parameterless ctor wins — emit `new T()` and post-construction setters.
+        //   2. Otherwise, take the single public instance ctor; emit `new T(p1, p2, ...)` with
+        //      members matched to params by case-insensitive name (matches the runtime's
+        //      `NamedParameterCreatorMapConvention`).
+        // If neither holds (e.g. multiple non-private ctors with no parameterless), we skip the
+        // type for v1. A diagnostic in #6 should surface this so users know to add a
+        // `[BsonConstructor]` or expose a parameterless ctor.
+        private static (ConstructionStrategy Strategy, EquatableArray<CtorParameter> Parameters)? DetermineConstructionStrategy(INamedTypeSymbol type)
+        {
+            if (type.IsAbstract || type.IsStatic)
+            {
+                return null;
+            }
+
+            IMethodSymbol? parameterless = null;
+            var publicCtors = new List<IMethodSymbol>();
+            foreach (var ctor in type.InstanceConstructors)
+            {
+                if (ctor.DeclaredAccessibility != Accessibility.Public) { continue; }
+                if (ctor.Parameters.Length == 0)
+                {
+                    parameterless = ctor;
+                }
+                else
+                {
+                    publicCtors.Add(ctor);
+                }
+            }
+
+            if (parameterless is not null)
+            {
+                return (ConstructionStrategy.Parameterless, new EquatableArray<CtorParameter>(ImmutableArray<CtorParameter>.Empty));
+            }
+
+            if (publicCtors.Count == 1)
+            {
+                var ctor = publicCtors[0];
+                var paramsBuilder = ImmutableArray.CreateBuilder<CtorParameter>(ctor.Parameters.Length);
+                foreach (var p in ctor.Parameters)
+                {
+                    paramsBuilder.Add(new CtorParameter(
+                        Name: p.Name,
+                        TypeFullName: p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                }
+                return (ConstructionStrategy.ParameterizedCtor, new EquatableArray<CtorParameter>(paramsBuilder.ToImmutable()));
+            }
+
+            return null;
         }
 
         // [BsonDiscriminator] on a type:

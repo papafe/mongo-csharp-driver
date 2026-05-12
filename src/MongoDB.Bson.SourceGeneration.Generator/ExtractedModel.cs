@@ -33,6 +33,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         string Discriminator,
         bool WriteDiscriminatorWhenSelf,
         EquatableArray<string> KnownTypeFullNames,
+        ConstructionStrategy ConstructionStrategy,
+        EquatableArray<CtorParameter> ConstructorParameters,
         EquatableArray<MemberToGenerate> Members);
 
     internal sealed record MemberToGenerate(
@@ -49,7 +51,24 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         bool Required,
         string? DefaultValueExpression,
         string? RepresentationBsonType,
-        string? CustomSerializerTypeFullName);
+        string? CustomSerializerTypeFullName,
+        bool IsInitOnly,
+        bool IsRequired);
+
+    // Names of the primary constructor's parameters, in declaration order, for types we'll
+    // construct via `new T(p1, p2, ...)`. The TypeFullName lets us declare a typed local even
+    // if no member matches the parameter by name (we fall back to `default(T)`).
+    internal sealed record CtorParameter(string Name, string TypeFullName);
+
+    // How the generator constructs an instance during Deserialize.
+    //   Parameterless     — type has a public parameterless ctor; emitter uses `new T()`.
+    //   ParameterizedCtor — no parameterless ctor; emitter calls a single non-private ctor with
+    //                       positional arguments matched to members by case-insensitive name.
+    internal enum ConstructionStrategy
+    {
+        Parameterless,
+        ParameterizedCtor
+    }
 
     // Primitives we read/write directly via BsonReader/BsonWriter without recursing
     // through BsonSerializer.LookupSerializer. Anything not in this enum falls through
