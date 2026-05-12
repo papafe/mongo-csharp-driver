@@ -1,4 +1,4 @@
-﻿/* Copyright 2010-present MongoDB Inc.
+/* Copyright 2010-present MongoDB Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -15,19 +15,22 @@
 
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Threading;
 using Microsoft.CodeAnalysis;
+using static MongoDB.Bson.SourceGeneration.Generator.AttributeReaders;
+using static MongoDB.Bson.SourceGeneration.Generator.SymbolHelpers;
 
 namespace MongoDB.Bson.SourceGeneration.Generator
 {
-    // Pulls ContextInfo out of a class decorated with [BsonSerializable]. Skips
-    // classes that don't derive from BsonSerializerContext; we'll report a
-    // diagnostic for that in ticket #6.
+    // Pulls ContextInfo out of a class decorated with [BsonSerializable]. Skips classes that
+    // don't derive from BsonSerializerContext; we'll report a diagnostic for that in ticket #6.
+    //
+    // The stateless helpers used here live in sibling files:
+    //   - AttributeSymbols       : cached INamedTypeSymbol lookups for the Bson attributes.
+    //   - AttributeReaders       : pull values out of an AttributeData (with safe escaping).
+    //   - SymbolHelpers          : Roslyn-symbol utilities (type classification, inheritance...).
     internal static class Extractor
     {
-        private const string BsonAttributesNs = "MongoDB.Bson.Serialization.Attributes.";
-
         private const string BsonSerializerContextMetadataName = "MongoDB.Bson.Serialization.BsonSerializerContext";
 
         public static ContextInfo? Extract(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
@@ -362,32 +365,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return (ExtraElementsKind.None, null);
         }
 
-        private static bool ImplementsIDictionaryStringObject(INamedTypeSymbol type)
-        {
-            foreach (var iface in type.AllInterfaces)
-            {
-                if (iface.Name != "IDictionary") { continue; }
-                if (iface.ContainingNamespace?.ToDisplayString() != "System.Collections.Generic") { continue; }
-                if (iface.TypeArguments.Length != 2) { continue; }
-                if (iface.TypeArguments[0].SpecialType != SpecialType.System_String) { continue; }
-                if (iface.TypeArguments[1].SpecialType != SpecialType.System_Object) { continue; }
-                return true;
-            }
-            return false;
-        }
-
-        private static bool HasParameterlessConstructor(INamedTypeSymbol type)
-        {
-            foreach (var ctor in type.InstanceConstructors)
-            {
-                if (ctor.DeclaredAccessibility == Accessibility.Public && ctor.Parameters.Length == 0)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
         private static string ResolveElementName(
             ISymbol member,
             string memberName,
@@ -425,253 +402,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             // Otherwise: the member name verbatim. Naming policies (camelCase, etc.) come later.
             return memberName;
-        }
-
-        private static PrimitiveKind ClassifyPrimitive(ITypeSymbol type)
-        {
-            return type.SpecialType switch
-            {
-                SpecialType.System_Boolean => PrimitiveKind.Boolean,
-                SpecialType.System_Int32 => PrimitiveKind.Int32,
-                SpecialType.System_Int64 => PrimitiveKind.Int64,
-                SpecialType.System_Double => PrimitiveKind.Double,
-                SpecialType.System_String => PrimitiveKind.String,
-                SpecialType.System_DateTime => PrimitiveKind.DateTime,
-                _ => ClassifyByFullName(type)
-            };
-        }
-
-        private static PrimitiveKind ClassifyByFullName(ITypeSymbol type)
-        {
-            if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
-            {
-                return PrimitiveKind.BinaryData;
-            }
-
-            var name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return name switch
-            {
-                "global::MongoDB.Bson.ObjectId" => PrimitiveKind.ObjectId,
-                "global::MongoDB.Bson.Decimal128" => PrimitiveKind.Decimal128,
-                "global::System.Guid" => PrimitiveKind.Guid,
-                _ => PrimitiveKind.None
-            };
-        }
-
-        private static bool HasAttribute(ISymbol symbol, INamedTypeSymbol? attribute)
-        {
-            if (attribute is null) { return false; }
-            foreach (var a in symbol.GetAttributes())
-            {
-                if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { return true; }
-            }
-            return false;
-        }
-
-        // A member "allows null" if its CLR type is a reference type or Nullable<T>.
-        // Drives whether [BsonIgnoreIfNull] gets an actual null-check guard or is a no-op.
-        private static bool AllowsNull(ITypeSymbol type)
-        {
-            if (type.IsReferenceType) { return true; }
-            if (type is INamedTypeSymbol named &&
-                named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
-            {
-                return true;
-            }
-            return false;
-        }
-
-        private static string? GetAttributeTypeArgument(ISymbol member, INamedTypeSymbol? attribute)
-        {
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
-            {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                if (a.ConstructorArguments[0].Value is INamedTypeSymbol t)
-                {
-                    return t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                }
-            }
-            return null;
-        }
-
-        private static string? GetRepresentationEnumName(ISymbol member, INamedTypeSymbol? attribute)
-        {
-            // [BsonRepresentation(BsonType.X)] — capture the enum field name ("String", "Int32", etc.).
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
-            {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                var arg = a.ConstructorArguments[0];
-                if (arg.Type is INamedTypeSymbol { Name: "BsonType" } && arg.Value is int enumValue)
-                {
-                    // Find the matching field name on the enum
-                    foreach (var field in arg.Type.GetMembers())
-                    {
-                        if (field is IFieldSymbol f && f.IsConst && f.ConstantValue is int v && v == enumValue)
-                        {
-                            return f.Name;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        private static string? GetDefaultValueExpression(ISymbol member, INamedTypeSymbol? attribute)
-        {
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
-            {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                return ToCSharpLiteral(a.ConstructorArguments[0]);
-            }
-            return null;
-        }
-
-        // Converts a primitive TypedConstant into a C# literal expression that's safe to
-        // splice into emitted source. We don't try to handle non-primitive defaults in v1
-        // (e.g., struct values, enum from a typed constant); those would surface as a
-        // diagnostic in ticket #6.
-        private static string? ToCSharpLiteral(TypedConstant constant)
-        {
-            if (constant.IsNull) { return "null"; }
-            if (constant.Type is null || constant.Value is null) { return null; }
-
-            switch (constant.Type.SpecialType)
-            {
-                case SpecialType.System_Boolean: return (bool)constant.Value ? "true" : "false";
-                case SpecialType.System_Int32: return ((int)constant.Value).ToString(CultureInfo.InvariantCulture);
-                case SpecialType.System_Int64: return ((long)constant.Value).ToString(CultureInfo.InvariantCulture) + "L";
-                case SpecialType.System_Double: return ((double)constant.Value).ToString("R", CultureInfo.InvariantCulture) + "D";
-                case SpecialType.System_Single: return ((float)constant.Value).ToString("R", CultureInfo.InvariantCulture) + "F";
-                case SpecialType.System_String: return "\"" + EscapeStringLiteral((string)constant.Value) + "\"";
-                case SpecialType.System_Char: return "'" + EscapeCharLiteral((char)constant.Value) + "'";
-                default: return null;
-            }
-        }
-
-        private static string EscapeStringLiteral(string value)
-        {
-            var sb = new System.Text.StringBuilder(value.Length);
-            foreach (var c in value)
-            {
-                switch (c)
-                {
-                    case '\\': sb.Append("\\\\"); break;
-                    case '"': sb.Append("\\\""); break;
-                    case '\n': sb.Append("\\n"); break;
-                    case '\r': sb.Append("\\r"); break;
-                    case '\t': sb.Append("\\t"); break;
-                    case '\0': sb.Append("\\0"); break;
-                    default: sb.Append(c); break;
-                }
-            }
-            return sb.ToString();
-        }
-
-        private static string EscapeCharLiteral(char value)
-        {
-            return value switch
-            {
-                '\\' => "\\\\",
-                '\'' => "\\'",
-                '\n' => "\\n",
-                '\r' => "\\r",
-                '\t' => "\\t",
-                '\0' => "\\0",
-                _ => value.ToString()
-            };
-        }
-
-        private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
-        {
-            for (var current = type.BaseType; current is not null; current = current.BaseType)
-            {
-                if (SymbolEqualityComparer.Default.Equals(current, baseType))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static string GetNamespace(INamedTypeSymbol symbol)
-        {
-            return symbol.ContainingNamespace.IsGlobalNamespace
-                ? string.Empty
-                : symbol.ContainingNamespace.ToDisplayString();
-        }
-
-        // Cached lookups of the attribute types in the current Compilation. INamedTypeSymbol
-        // values stay scoped to the Extract call; they never flow through the incremental cache.
-        private readonly struct AttributeSymbols
-        {
-            public readonly INamedTypeSymbol? Element;
-            public readonly INamedTypeSymbol? Id;
-            public readonly INamedTypeSymbol? Ignore;
-            public readonly INamedTypeSymbol? IgnoreIfNull;
-            public readonly INamedTypeSymbol? IgnoreIfDefault;
-            public readonly INamedTypeSymbol? Required;
-            public readonly INamedTypeSymbol? DefaultValue;
-            public readonly INamedTypeSymbol? ExtraElements;
-            public readonly INamedTypeSymbol? Representation;
-            public readonly INamedTypeSymbol? Serializer;
-            public readonly INamedTypeSymbol? IgnoreExtraElements;
-            public readonly INamedTypeSymbol? NoId;
-            public readonly INamedTypeSymbol? Discriminator;
-            public readonly INamedTypeSymbol? KnownTypes;
-
-            private AttributeSymbols(
-                INamedTypeSymbol? element,
-                INamedTypeSymbol? id,
-                INamedTypeSymbol? ignore,
-                INamedTypeSymbol? ignoreIfNull,
-                INamedTypeSymbol? ignoreIfDefault,
-                INamedTypeSymbol? required,
-                INamedTypeSymbol? defaultValue,
-                INamedTypeSymbol? extraElements,
-                INamedTypeSymbol? representation,
-                INamedTypeSymbol? serializer,
-                INamedTypeSymbol? ignoreExtraElements,
-                INamedTypeSymbol? noId,
-                INamedTypeSymbol? discriminator,
-                INamedTypeSymbol? knownTypes)
-            {
-                Element = element;
-                Id = id;
-                Ignore = ignore;
-                IgnoreIfNull = ignoreIfNull;
-                IgnoreIfDefault = ignoreIfDefault;
-                Required = required;
-                DefaultValue = defaultValue;
-                ExtraElements = extraElements;
-                Representation = representation;
-                Serializer = serializer;
-                IgnoreExtraElements = ignoreExtraElements;
-                NoId = noId;
-                Discriminator = discriminator;
-                KnownTypes = knownTypes;
-            }
-
-            public static AttributeSymbols Resolve(Compilation compilation) => new(
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonElementAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIdAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIgnoreAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIgnoreIfNullAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIgnoreIfDefaultAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonRequiredAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonDefaultValueAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonExtraElementsAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonRepresentationAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonSerializerAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIgnoreExtraElementsAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonNoIdAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonDiscriminatorAttribute"),
-                compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonKnownTypesAttribute"));
         }
     }
 }
