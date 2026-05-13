@@ -40,6 +40,8 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(PersonRecord))]
     [BsonSerializable(typeof(AccountProfile))]
     [BsonSerializable(typeof(AppSettings))]
+    [BsonSerializable(typeof(Geo.Marker))]
+    [BsonSerializable(typeof(Site.Marker))]
     public partial class TestContext : BsonSerializerContext
     {
     }

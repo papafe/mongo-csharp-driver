@@ -72,7 +72,46 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return new ContextInfo(
                 ContextNamespace: GetNamespace(contextSymbol),
                 ContextName: contextSymbol.Name,
-                Types: new EquatableArray<TypeToGenerate>(types.ToImmutable()));
+                Types: new EquatableArray<TypeToGenerate>(DisambiguateShortNames(types)));
+        }
+
+        // Two listed types from different namespaces can share a short name (e.g. `MyApp.Customer`
+        // and `Other.Customer`). The emitter names each generated serializer after the short name
+        // (`CustomerSerializer`, `s_customerSerializer`), so a collision would produce duplicate
+        // identifiers inside the partial context class — CS0102 with no useful pointer at the cause.
+        // We rewrite second+ occurrences of any short name with a numeric suffix (Customer,
+        // Customer2, Customer3, …) in attribute-declaration order, which is stable across rebuilds.
+        // Polymorphic dispatch keys off TypeFullName, so KnownTypes references survive the rename
+        // unchanged.
+        private static ImmutableArray<TypeToGenerate> DisambiguateShortNames(
+            ImmutableArray<TypeToGenerate>.Builder types)
+        {
+            // Cheap first pass: bail out if no short name appears twice.
+            var seen = new HashSet<string>(System.StringComparer.Ordinal);
+            var hasCollision = false;
+            foreach (var t in types)
+            {
+                if (!seen.Add(t.TypeShortName)) { hasCollision = true; break; }
+            }
+            if (!hasCollision) { return types.ToImmutable(); }
+
+            var counts = new Dictionary<string, int>(System.StringComparer.Ordinal);
+            var result = ImmutableArray.CreateBuilder<TypeToGenerate>(types.Count);
+            foreach (var t in types)
+            {
+                counts.TryGetValue(t.TypeShortName, out var n);
+                counts[t.TypeShortName] = n + 1;
+                if (n == 0)
+                {
+                    result.Add(t);
+                }
+                else
+                {
+                    var suffixed = t.TypeShortName + (n + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    result.Add(t with { TypeShortName = suffixed });
+                }
+            }
+            return result.ToImmutable();
         }
 
         private static TypeToGenerate? ExtractType(
