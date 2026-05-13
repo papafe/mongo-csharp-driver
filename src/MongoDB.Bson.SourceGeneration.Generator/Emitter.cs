@@ -247,35 +247,38 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).AppendLine("    }");
         }
 
+        // Emits `private static T DeserializeCore(...)`. Two construction paths share one body:
+        //
+        //   Path A (immediate): the type has a parameterless ctor and no init-only / required
+        //     members. We declare `var result = new T();` up front and each switch case assigns
+        //     `result.X = …` directly. Honors ctor-provided defaults for members not in the BSON.
+        //
+        //   Path B (deferred): the type has either no parameterless ctor (positional records) or
+        //     at least one init-only / required member. We declare a `_local_X` per member, read
+        //     into the locals, then construct with `new T(ctor_locals…) { init = … }` and
+        //     post-assign plain settable members.
+        //
+        // The structural shape — header, read loop, _t case, switch cases, [BsonRequired] /
+        // [BsonDefaultValue] post-checks — is identical; only the assignment target differs and
+        // Path B has a construction tail. `targetOf` picks the right form for each member.
+        //
+        // Path B limitation: class-level field initializers on init/required members are NOT
+        // honored when the BSON omits them; the local stays at `default(T)` and overwrites
+        // whatever the class-level initializer set. Matches the reflection path's
+        // `FormatterServices.GetUninitializedObject` behavior for types without a parameterless ctor.
         private static void EmitDeserializeCore(StringBuilder sb, TypeToGenerate type, string indent)
         {
-            // Members we need to track "was this element seen?" for — drives [BsonRequired] checks
-            // and [BsonDefaultValue] fallback assignment after the read loop.
+            // "Was this element seen?" tracking drives [BsonRequired] (throw if missing) and
+            // [BsonDefaultValue] (assign default if missing) after the read loop.
             var trackedNames = new HashSet<string>();
             foreach (var m in type.Members)
             {
-                if (m.Required || m.DefaultValueExpression is not null)
-                {
-                    trackedNames.Add(m.Name);
-                }
+                if (m.Required || m.DefaultValueExpression is not null) { trackedNames.Add(m.Name); }
             }
 
-            if (NeedsDeferredConstruction(type))
-            {
-                EmitDeserializeCoreDeferred(sb, type, trackedNames, indent);
-            }
-            else
-            {
-                EmitDeserializeCoreImmediate(sb, type, trackedNames, indent);
-            }
-        }
+            var deferred = NeedsDeferredConstruction(type);
+            string TargetOf(MemberToGenerate m) => deferred ? "_local_" + m.Name : "result." + m.Name;
 
-        // Path A (immediate construction): the simple case. `var result = new T()` up front,
-        // and each switch case assigns directly to `result.X`. Honors ctor-provided defaults for
-        // members not in the BSON document because we only touch a member when its element appears.
-        // Applies when the type has a parameterless ctor AND has no `init`-only / `required` members.
-        private static void EmitDeserializeCoreImmediate(StringBuilder sb, TypeToGenerate type, HashSet<string> trackedNames, string indent)
-        {
             var i = indent + "    ";
 
             sb.Append(i).Append("private static ").Append(type.TypeFullName)
@@ -283,13 +286,25 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(i).AppendLine("{");
             sb.Append(i).AppendLine("    var reader = context.Reader;");
             sb.Append(i).AppendLine("    reader.ReadStartDocument();");
-            sb.Append(i).Append("    var result = new ").Append(type.TypeFullName).AppendLine("();");
 
+            // Pre-loop declarations.
+            if (deferred)
+            {
+                foreach (var m in type.Members)
+                {
+                    sb.Append(i).Append("    ").Append(m.TypeFullName).Append(" _local_").Append(m.Name).AppendLine(" = default!;");
+                }
+            }
+            else
+            {
+                sb.Append(i).Append("    var result = new ").Append(type.TypeFullName).AppendLine("();");
+            }
             foreach (var name in trackedNames)
             {
                 sb.Append(i).Append("    bool _seen_").Append(name).AppendLine(" = false;");
             }
 
+            // Read loop.
             sb.Append(i).AppendLine("    while (reader.ReadBsonType() != global::MongoDB.Bson.BsonType.EndOfDocument)");
             sb.Append(i).AppendLine("    {");
             sb.Append(i).AppendLine("        var name = global::MongoDB.Bson.IO.IBsonReaderExtensions.ReadName(reader);");
@@ -304,8 +319,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             foreach (var m in type.Members)
             {
                 if (m.IsExtraElements) { continue; }
-                sb.Append(i).Append("            case \"").Append(m.ElementName).Append("\": result.")
-                  .Append(m.Name).Append(" = ");
+                sb.Append(i).Append("            case \"").Append(m.ElementName).Append("\": ").Append(TargetOf(m)).Append(" = ");
                 EmitReadExpression(sb, m);
                 sb.Append(";");
                 if (trackedNames.Contains(m.Name))
@@ -315,12 +329,13 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 sb.AppendLine(" break;");
             }
 
-            EmitDeserializeDefaultCase(sb, type, i, useLocalTarget: false);
+            EmitDeserializeDefaultCase(sb, type, i, useLocalTarget: deferred);
 
             sb.Append(i).AppendLine("        }");
             sb.Append(i).AppendLine("    }");
             sb.Append(i).AppendLine("    reader.ReadEndDocument();");
 
+            // [BsonRequired] / [BsonDefaultValue] post-checks against the chosen target.
             foreach (var m in type.Members)
             {
                 if (m.Required)
@@ -330,9 +345,16 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 }
                 else if (m.DefaultValueExpression is not null)
                 {
-                    sb.Append(i).Append("    if (!_seen_").Append(m.Name).Append(") { result.").Append(m.Name).Append(" = ")
+                    sb.Append(i).Append("    if (!_seen_").Append(m.Name).Append(") { ").Append(TargetOf(m)).Append(" = ")
                       .Append(m.DefaultValueExpression).AppendLine("; }");
                 }
+            }
+
+            // Path B only: ctor invocation, initializer block for init/required slots, post-construction
+            // assignments for plain settable members.
+            if (deferred)
+            {
+                EmitDeferredConstruction(sb, type, i);
             }
 
             sb.Append(i).AppendLine("    return result;");
@@ -340,110 +362,35 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.AppendLine();
         }
 
-        // Path B (deferred construction): read every member into a local first, then build the
-        // instance with `new T(ctor_locals…) { init_locals = …, … }`. Required for any of:
-        //   - The type has no parameterless ctor (positional records).
-        //   - The type has `init`-only members.
-        //   - The type has C# 11 `required` members.
-        // Limitation: class-level field initializers on init/required members are NOT honored when
-        // the BSON document omits them; the local stays at `default(T)` and overwrites whatever the
-        // class-level initializer set. Matches the reflection path's `FormatterServices.
-        // GetUninitializedObject` behavior for types without a parameterless ctor.
-        private static void EmitDeserializeCoreDeferred(StringBuilder sb, TypeToGenerate type, HashSet<string> trackedNames, string indent)
+        // Emits the Path B construction tail: `var result = new T(ctor_locals…) { init = … };`
+        // followed by `result.X = _local_X;` per plain settable member. Ctor parameters are
+        // matched to members by case-insensitive name; unmatched params fall through to
+        // `default(TParam)` (#6 diagnostic territory).
+        private static void EmitDeferredConstruction(StringBuilder sb, TypeToGenerate type, string indent)
         {
-            var i = indent + "    ";
-
-            // Classify each member into a construction slot. Order: ctor-param first (matched by
-            // case-insensitive name to a constructor parameter), then init/required (initializer),
-            // then plain (post-construction assignment).
             var ctorParamToMember = BuildCtorParamMatches(type);
-            var membersByName = new Dictionary<string, MemberToGenerate>();
-            foreach (var m in type.Members) { membersByName[m.Name] = m; }
+            var matchedMemberNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var kv in ctorParamToMember) { matchedMemberNames.Add(kv.Value.Name); }
 
-            sb.Append(i).Append("private static ").Append(type.TypeFullName)
-              .AppendLine(" DeserializeCore(global::MongoDB.Bson.Serialization.BsonDeserializationContext context, global::MongoDB.Bson.Serialization.BsonDeserializationArgs args)");
-            sb.Append(i).AppendLine("{");
-            sb.Append(i).AppendLine("    var reader = context.Reader;");
-            sb.Append(i).AppendLine("    reader.ReadStartDocument();");
-
-            // Locals per member, default-initialized.
-            foreach (var m in type.Members)
-            {
-                sb.Append(i).Append("    ").Append(m.TypeFullName).Append(" _local_").Append(m.Name).AppendLine(" = default!;");
-            }
-            foreach (var name in trackedNames)
-            {
-                sb.Append(i).Append("    bool _seen_").Append(name).AppendLine(" = false;");
-            }
-
-            sb.Append(i).AppendLine("    while (reader.ReadBsonType() != global::MongoDB.Bson.BsonType.EndOfDocument)");
-            sb.Append(i).AppendLine("    {");
-            sb.Append(i).AppendLine("        var name = global::MongoDB.Bson.IO.IBsonReaderExtensions.ReadName(reader);");
-            sb.Append(i).AppendLine("        switch (name)");
-            sb.Append(i).AppendLine("        {");
-
-            if (type.WriteDiscriminatorWhenSelf)
-            {
-                sb.Append(i).AppendLine("            case \"_t\": reader.SkipValue(); break;");
-            }
-
-            foreach (var m in type.Members)
-            {
-                if (m.IsExtraElements) { continue; }
-                sb.Append(i).Append("            case \"").Append(m.ElementName).Append("\": _local_")
-                  .Append(m.Name).Append(" = ");
-                EmitReadExpression(sb, m);
-                sb.Append(";");
-                if (trackedNames.Contains(m.Name))
-                {
-                    sb.Append(" _seen_").Append(m.Name).Append(" = true;");
-                }
-                sb.AppendLine(" break;");
-            }
-
-            EmitDeserializeDefaultCase(sb, type, i, useLocalTarget: true);
-
-            sb.Append(i).AppendLine("        }");
-            sb.Append(i).AppendLine("    }");
-            sb.Append(i).AppendLine("    reader.ReadEndDocument();");
-
-            // [BsonRequired] / [BsonDefaultValue] applied to locals.
-            foreach (var m in type.Members)
-            {
-                if (m.Required)
-                {
-                    sb.Append(i).Append("    if (!_seen_").Append(m.Name).Append(") { throw new global::MongoDB.Bson.BsonSerializationException(\"Required member '")
-                      .Append(m.Name).Append("' of ").Append(type.TypeFullName).AppendLine(" was not found in the BSON document.\"); }");
-                }
-                else if (m.DefaultValueExpression is not null)
-                {
-                    sb.Append(i).Append("    if (!_seen_").Append(m.Name).Append(") { _local_").Append(m.Name).Append(" = ")
-                      .Append(m.DefaultValueExpression).AppendLine("; }");
-                }
-            }
-
-            // Construction.
-            sb.Append(i).Append("    var result = new ").Append(type.TypeFullName).Append("(");
+            sb.Append(indent).Append("    var result = new ").Append(type.TypeFullName).Append("(");
             for (var p = 0; p < type.ConstructorParameters.Count; p++)
             {
                 if (p > 0) { sb.Append(", "); }
-                var param = type.ConstructorParameters[p];
                 if (ctorParamToMember.TryGetValue(p, out var matched))
                 {
                     sb.Append("_local_").Append(matched.Name);
                 }
                 else
                 {
-                    // Param has no matching member — pass default. A diagnostic in #6 will surface this.
-                    sb.Append("default(").Append(param.TypeFullName).Append(")");
+                    sb.Append("default(").Append(type.ConstructorParameters[p].TypeFullName).Append(")");
                 }
             }
             sb.Append(")");
 
-            // Initializer block for init-only and required members not already passed to the ctor.
+            // Init-only / required members that weren't bound to a ctor param land in the object
+            // initializer block. Compiler refuses `new T() { … }` if required members are missing,
+            // so this is where they must go.
             var initSlot = new List<MemberToGenerate>();
-            var matchedMemberNames = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var kv in ctorParamToMember) { matchedMemberNames.Add(kv.Value.Name); }
             foreach (var m in type.Members)
             {
                 if (matchedMemberNames.Contains(m.Name)) { continue; }
@@ -453,31 +400,27 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             if (initSlot.Count > 0)
             {
                 sb.AppendLine();
-                sb.Append(i).AppendLine("    {");
+                sb.Append(indent).AppendLine("    {");
                 for (var k = 0; k < initSlot.Count; k++)
                 {
                     var m = initSlot[k];
-                    sb.Append(i).Append("        ").Append(m.Name).Append(" = _local_").Append(m.Name);
+                    sb.Append(indent).Append("        ").Append(m.Name).Append(" = _local_").Append(m.Name);
                     sb.AppendLine(k == initSlot.Count - 1 ? string.Empty : ",");
                 }
-                sb.Append(i).AppendLine("    };");
+                sb.Append(indent).AppendLine("    };");
             }
             else
             {
                 sb.AppendLine(";");
             }
 
-            // Post-construction assignments for plain settable members.
+            // Everything else (plain settable, not bound to ctor) gets post-construction assignment.
             foreach (var m in type.Members)
             {
                 if (matchedMemberNames.Contains(m.Name)) { continue; }
                 if (m.IsInitOnly || m.IsRequired) { continue; }
-                sb.Append(i).Append("    result.").Append(m.Name).Append(" = _local_").Append(m.Name).AppendLine(";");
+                sb.Append(indent).Append("    result.").Append(m.Name).Append(" = _local_").Append(m.Name).AppendLine(";");
             }
-
-            sb.Append(i).AppendLine("    return result;");
-            sb.Append(i).AppendLine("}");
-            sb.AppendLine();
         }
 
         // Builds a map from ctor-parameter index → matched MemberToGenerate, matching by
