@@ -14,6 +14,7 @@
 */
 
 using System;
+using System.Threading;
 
 namespace MongoDB.Bson.Serialization
 {
@@ -32,6 +33,8 @@ namespace MongoDB.Bson.Serialization
     /// </remarks>
     public abstract class BsonSerializerContext : IBsonSerializationProvider
     {
+        private int _registered;
+
         // public methods
         /// <summary>
         /// Returns the generated serializer for <paramref name="type"/>, or <c>null</c> if this
@@ -45,10 +48,16 @@ namespace MongoDB.Bson.Serialization
         /// <summary>
         /// Registers this context as a BSON serialization provider. Subsequent serializer
         /// lookups for the context's listed types resolve here before any built-in provider.
+        /// Calling this method more than once on the same instance is a no-op; the registry
+        /// is a stack with no deduplication, so without this guard each repeat call would push
+        /// the same provider again and lengthen every subsequent serializer lookup.
         /// </summary>
         public void Register()
         {
-            BsonSerializer.RegisterSerializationProvider(this);
+            if (Interlocked.CompareExchange(ref _registered, 1, 0) == 0)
+            {
+                BsonSerializer.RegisterSerializationProvider(this);
+            }
         }
     }
 }
