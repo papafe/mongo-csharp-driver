@@ -11,6 +11,12 @@
     <Description>Integration tests for MongoDB.Bson.SourceGeneration: hand-emitted reference serializers, four-way parity vs. BsonClassMapSerializer, and end-to-end round trips.</Description>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- Underscores in test method names are conventional (the_thing_under_test_does_this). The
+         ruleset silences CA1707 at build time, but listing it here keeps the IDE quiet too. -->
+    <NoWarn>CA1707</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
