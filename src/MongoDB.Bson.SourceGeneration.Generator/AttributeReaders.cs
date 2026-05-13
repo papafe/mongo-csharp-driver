@@ -25,52 +25,50 @@ namespace MongoDB.Bson.SourceGeneration.Generator
     // isn't reachable from the compilation) without an extra null check at the call site.
     internal static class AttributeReaders
     {
-        public static bool HasAttribute(ISymbol symbol, INamedTypeSymbol? attribute)
+        // Returns the first `AttributeData` on `symbol` whose class matches `attribute`, or null.
+        // Centralises the filter loop that every public reader below would otherwise repeat.
+        // A null `attribute` (meaning the attribute type isn't reachable from the compilation)
+        // short-circuits to null so callers don't need an extra guard.
+        private static AttributeData? FindAttribute(ISymbol symbol, INamedTypeSymbol? attribute)
         {
-            if (attribute is null) { return false; }
+            if (attribute is null) { return null; }
             foreach (var a in symbol.GetAttributes())
             {
-                if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { return true; }
+                if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { return a; }
             }
-            return false;
+            return null;
         }
+
+        public static bool HasAttribute(ISymbol symbol, INamedTypeSymbol? attribute)
+            => FindAttribute(symbol, attribute) is not null;
 
         // Reads the first ctor argument of `[Attribute(typeof(X))]` and returns X's fully-qualified
         // name. Used by `[BsonSerializer(typeof(X))]` to capture the passthrough serializer type.
         public static string? GetAttributeTypeArgument(ISymbol member, INamedTypeSymbol? attribute)
         {
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
-            {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                if (a.ConstructorArguments[0].Value is INamedTypeSymbol t)
-                {
-                    return t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                }
-            }
-            return null;
+            var a = FindAttribute(member, attribute);
+            if (a is null || a.ConstructorArguments.Length < 1) { return null; }
+            return a.ConstructorArguments[0].Value is INamedTypeSymbol t
+                ? t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                : null;
         }
 
         // Reads `[BsonRepresentation(BsonType.X)]` and returns the enum field name ("String",
         // "Int32", etc.) so the emitter can splice `BsonType.<Name>` into a serializer ctor call.
         public static string? GetRepresentationEnumName(ISymbol member, INamedTypeSymbol? attribute)
         {
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
+            var a = FindAttribute(member, attribute);
+            if (a is null || a.ConstructorArguments.Length < 1) { return null; }
+            var arg = a.ConstructorArguments[0];
+            if (arg.Type is not INamedTypeSymbol { Name: "BsonType" } || arg.Value is not int enumValue)
             {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                var arg = a.ConstructorArguments[0];
-                if (arg.Type is INamedTypeSymbol { Name: "BsonType" } && arg.Value is int enumValue)
+                return null;
+            }
+            foreach (var field in arg.Type.GetMembers())
+            {
+                if (field is IFieldSymbol f && f.IsConst && f.ConstantValue is int v && v == enumValue)
                 {
-                    foreach (var field in arg.Type.GetMembers())
-                    {
-                        if (field is IFieldSymbol f && f.IsConst && f.ConstantValue is int v && v == enumValue)
-                        {
-                            return f.Name;
-                        }
-                    }
+                    return f.Name;
                 }
             }
             return null;
@@ -78,14 +76,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
         public static string? GetDefaultValueExpression(ISymbol member, INamedTypeSymbol? attribute)
         {
-            if (attribute is null) { return null; }
-            foreach (var a in member.GetAttributes())
-            {
-                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attribute)) { continue; }
-                if (a.ConstructorArguments.Length < 1) { continue; }
-                return ToCSharpLiteral(a.ConstructorArguments[0]);
-            }
-            return null;
+            var a = FindAttribute(member, attribute);
+            if (a is null || a.ConstructorArguments.Length < 1) { return null; }
+            return ToCSharpLiteral(a.ConstructorArguments[0]);
         }
 
         // Converts a primitive `TypedConstant` into a C# literal expression that's safe to splice
