@@ -52,15 +52,17 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).Append("partial class ").AppendLine(context.ContextName);
             sb.Append(indent).AppendLine("{");
 
+            // Partial-class surface — what the user touches:
+            //   - Default singleton
+            //   - CreateProvider override (returns the nested provider class)
+            // Everything else (per-type serializer classes, their cached fields, the
+            // GetSerializer switch) lives one level deeper inside GeneratedProvider so the
+            // context type itself stays clean.
             EmitDefaultProperty(sb, context, indent);
-            EmitSerializerFields(sb, context, indent);
-            EmitGetSerializer(sb, context, indent);
+            EmitCreateProviderOverride(sb, indent);
 
             var typesByFullName = BuildTypeIndex(context);
-            foreach (var type in context.Types)
-            {
-                EmitSerializerClass(sb, type, typesByFullName, indent);
-            }
+            EmitGeneratedProviderClass(sb, context, typesByFullName, indent);
 
             sb.Append(indent).AppendLine("}");
 
@@ -77,6 +79,37 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).Append("    public static ").Append(context.ContextName)
               .Append(" Default { get; } = new ").Append(context.ContextName).AppendLine("();");
             sb.AppendLine();
+        }
+
+        // Override of the abstract CreateProvider on BsonSerializerContext. The base class wraps
+        // this in a Lazy so the provider — and therefore the per-type serializer instances inside
+        // it — only materialise on first access (Register() or .Provider).
+        private static void EmitCreateProviderOverride(StringBuilder sb, string indent)
+        {
+            sb.Append(indent).AppendLine("    protected override global::MongoDB.Bson.Serialization.IBsonSerializationProvider CreateProvider()");
+            sb.Append(indent).AppendLine("        => new GeneratedProvider();");
+            sb.AppendLine();
+        }
+
+        private static void EmitGeneratedProviderClass(
+            StringBuilder sb,
+            ContextInfo context,
+            Dictionary<string, TypeToGenerate> typesByFullName,
+            string indent)
+        {
+            var i = indent + "    ";
+            sb.Append(i).AppendLine("private sealed class GeneratedProvider : global::MongoDB.Bson.Serialization.IBsonSerializationProvider");
+            sb.Append(i).AppendLine("{");
+
+            EmitSerializerFields(sb, context, i);
+            EmitGetSerializer(sb, context, i);
+
+            foreach (var type in context.Types)
+            {
+                EmitSerializerClass(sb, type, typesByFullName, i);
+            }
+
+            sb.Append(i).AppendLine("}");
         }
 
         private static void EmitSerializerFields(StringBuilder sb, ContextInfo context, string indent)
@@ -96,7 +129,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
         private static void EmitGetSerializer(StringBuilder sb, ContextInfo context, string indent)
         {
-            sb.Append(indent).AppendLine("    public override global::MongoDB.Bson.Serialization.IBsonSerializer? GetSerializer(global::System.Type type)");
+            sb.Append(indent).AppendLine("    public global::MongoDB.Bson.Serialization.IBsonSerializer? GetSerializer(global::System.Type type)");
             sb.Append(indent).AppendLine("    {");
 
             foreach (var type in context.Types)
