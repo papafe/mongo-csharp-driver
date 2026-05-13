@@ -42,6 +42,13 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(AppSettings))]
     [BsonSerializable(typeof(Geo.Marker))]
     [BsonSerializable(typeof(Site.Marker))]
+    [BsonSerializable(typeof(Vehicle))]
+    [BsonSerializable(typeof(Car))]
+    [BsonSerializable(typeof(Entity))]
+    [BsonSerializable(typeof(Document))]
+    [BsonSerializable(typeof(Article))]
+    [BsonSerializable(typeof(Plant))]
+    [BsonSerializable(typeof(Flower))]
     public partial class TestContext : BsonSerializerContext
     {
     }
