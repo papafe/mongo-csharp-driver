@@ -22,7 +22,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
     /// Incremental source generator that emits BSON serializers for types listed in classes
     /// deriving from <c>BsonSerializerContext</c>.
     /// </summary>
-    [Generator(LanguageNames.CSharp)]
+    [Generator]
     public sealed class BsonSourceGenerator : IIncrementalGenerator
     {
         private const string BsonSerializableAttributeMetadataName =
