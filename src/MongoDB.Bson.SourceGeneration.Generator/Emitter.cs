@@ -800,9 +800,11 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         // Decides whether a member needs a cached per-member serializer instance, and if so,
         // what type and how to construct it.
         //
-        // Precedence: [BsonSerializer(typeof(X))] wins over [BsonRepresentation(BsonType.Y)].
-        // Rationale: the user named a specific serializer; honoring representation on top of that
-        // would require mutating their serializer, which the runtime convention doesn't promise.
+        // Precedence (highest first):
+        //   1. [BsonSerializer(typeof(X))] — user named a concrete serializer.
+        //   2. [BsonRepresentation(BsonType.Y)] — primitive re-encoded as a different BSON type.
+        //   3. Context-level DefaultGuidRepresentation, applied only to Guid members that don't
+        //      already have one of the above.
         //
         // [BsonRepresentation] is only honored on members whose CLR type maps to a known
         // PrimitiveKind. Putting it on non-primitive members has no effect today; a diagnostic
@@ -825,6 +827,14 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                         FieldType: serializerType,
                         InitExpression: "new " + serializerType + "(global::MongoDB.Bson.BsonType." + m.RepresentationBsonType + ")");
                 }
+            }
+
+            if (m.PrimitiveKind == PrimitiveKind.Guid && m.GuidRepresentationOverride is not null)
+            {
+                const string guidSerializer = "global::MongoDB.Bson.Serialization.Serializers.GuidSerializer";
+                return new MemberOverride(
+                    FieldType: guidSerializer,
+                    InitExpression: "new " + guidSerializer + "(global::MongoDB.Bson.GuidRepresentation." + m.GuidRepresentationOverride + ")");
             }
 
             return null;

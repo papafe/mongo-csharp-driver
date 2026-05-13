@@ -44,5 +44,12 @@ namespace MongoDB.Bson.Serialization.Attributes
         /// Gets the type to generate a BSON serializer for.
         /// </summary>
         public Type Type => _type;
+
+        /// <summary>
+        /// Overrides the context-wide <see cref="BsonSourceGenerationOptionsAttribute.DefaultGuidRepresentation"/>
+        /// for this specific type. <see cref="GuidRepresentation.Unspecified"/> (the default) means
+        /// "inherit from the context."
+        /// </summary>
+        public GuidRepresentation DefaultGuidRepresentation { get; set; } = GuidRepresentation.Unspecified;
     }
 }

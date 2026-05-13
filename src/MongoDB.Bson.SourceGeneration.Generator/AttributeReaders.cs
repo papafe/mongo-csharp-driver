@@ -81,6 +81,33 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return ToCSharpLiteral(a.ConstructorArguments[0]);
         }
 
+        // Reads a named argument that's typed as an enum and returns the enum-field name (e.g.,
+        // "Standard" for `GuidRepresentation.Standard`). Returns null when the named arg is absent
+        // or matches the supplied `unsetValue` sentinel (typically the enum's zero member like
+        // `GuidRepresentation.Unspecified`) — both mean "no opinion at this layer."
+        public static string? GetEnumNamedArgument(
+            AttributeData a,
+            string argName,
+            string enumTypeName,
+            int unsetValue)
+        {
+            foreach (var named in a.NamedArguments)
+            {
+                if (named.Key != argName) { continue; }
+                if (named.Value.Type is not INamedTypeSymbol nt || nt.Name != enumTypeName) { continue; }
+                if (named.Value.Value is not int enumValue) { continue; }
+                if (enumValue == unsetValue) { return null; }
+                foreach (var field in nt.GetMembers())
+                {
+                    if (field is IFieldSymbol f && f.IsConst && f.ConstantValue is int v && v == enumValue)
+                    {
+                        return f.Name;
+                    }
+                }
+            }
+            return null;
+        }
+
         // Converts a primitive `TypedConstant` into a C# literal expression that's safe to splice
         // into emitted source. v1 covers the primitive types `[BsonDefaultValue]` users actually
         // pass; non-primitive defaults (struct values, enum from a typed constant) return null and

@@ -51,6 +51,10 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             var attrs = AttributeSymbols.Resolve(compilation);
 
+            // Resolve the context-wide [BsonSourceGenerationOptions] once. Each per-listing and
+            // per-POCO layer overrides this default in the layered fold inside ExtractType.
+            var contextOptions = ResolveContextOptions(contextSymbol, attrs);
+
             var types = ImmutableArray.CreateBuilder<TypeToGenerate>(context.Attributes.Length);
 
             foreach (var attribute in context.Attributes)
@@ -60,7 +64,14 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 if (attribute.ConstructorArguments.Length < 1) { continue; }
                 if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg) { continue; }
 
-                var typeInfo = ExtractType(typeArg, attrs, cancellationToken);
+                // Per-[BsonSerializable] named-arg override layers on top of context options.
+                var perListingGuid = AttributeReaders.GetEnumNamedArgument(
+                    attribute, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
+                var effective = perListingGuid is not null
+                    ? new EffectiveOptions(DefaultGuidRepresentation: perListingGuid)
+                    : contextOptions;
+
+                var typeInfo = ExtractType(typeArg, attrs, effective, cancellationToken);
                 if (typeInfo is not null)
                 {
                     types.Add(typeInfo);
@@ -114,13 +125,56 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return result.ToImmutable();
         }
 
+        // The compile-time-bakeable options that flow from context → per-[BsonSerializable] →
+        // per-POCO override. Null fields mean "no opinion at this layer" — the next layer's value
+        // (or the inline / LookupSerializer default) wins.
+        private readonly record struct EffectiveOptions(string? DefaultGuidRepresentation = null);
+
+        // Reads the context-wide [BsonSourceGenerationOptions] attribute on the context class once.
+        // Returns Empty when the attribute isn't present or all properties are at their sentinel
+        // values.
+        private static EffectiveOptions ResolveContextOptions(INamedTypeSymbol contextSymbol, AttributeSymbols attrs)
+        {
+            if (attrs.SourceGenerationOptions is null) { return default; }
+            foreach (var a in contextSymbol.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attrs.SourceGenerationOptions)) { continue; }
+                var guid = AttributeReaders.GetEnumNamedArgument(a, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
+                return new EffectiveOptions(DefaultGuidRepresentation: guid);
+            }
+            return default;
+        }
+
+        // [BsonSerializationOverride] on the POCO is the third layer of override. Returns the
+        // inherited options unless an explicit override is set.
+        private static EffectiveOptions FoldPocoOverride(
+            INamedTypeSymbol type,
+            AttributeSymbols attrs,
+            EffectiveOptions inherited)
+        {
+            if (attrs.SerializationOverride is null) { return inherited; }
+            foreach (var a in type.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attrs.SerializationOverride)) { continue; }
+                var guid = AttributeReaders.GetEnumNamedArgument(a, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
+                return inherited with { DefaultGuidRepresentation = guid ?? inherited.DefaultGuidRepresentation };
+            }
+            return inherited;
+        }
+
         private static TypeToGenerate? ExtractType(
             INamedTypeSymbol type,
             AttributeSymbols attrs,
+            EffectiveOptions inheritedOptions,
             CancellationToken cancellationToken)
         {
             var ignoreExtraElements = HasAttribute(type, attrs.IgnoreExtraElements);
             var noId = HasAttribute(type, attrs.NoId);
+
+            // Layered fold: context default → per-[BsonSerializable] override → per-POCO
+            // [BsonSerializationOverride]. Per-member attributes ([BsonRepresentation],
+            // [BsonSerializer]) still win and are handled inside BuildMember.
+            var effectiveOptions = FoldPocoOverride(type, attrs, inheritedOptions);
 
             // Walk derived → base, collecting one (fields, properties) pair per level. Names already
             // contributed by a more-derived level win (matches `new`/override semantics; first-seen
@@ -147,7 +201,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                     if (HasAttribute(member, attrs.Ignore)) { continue; }
                     if (!seenNames.Add(member.Name)) { continue; } // derived override already added
 
-                    var emitted = BuildMember(member, memberType, isInitOnly, isRequired, type.Name, noId, attrs);
+                    var emitted = BuildMember(member, memberType, isInitOnly, isRequired, type.Name, noId, attrs, effectiveOptions);
                     (isField ? fields : properties).Add(emitted);
                 }
 
@@ -235,7 +289,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             bool isRequired,
             string declaringTypeName,
             bool typeHasNoId,
-            AttributeSymbols attrs)
+            AttributeSymbols attrs,
+            EffectiveOptions options)
         {
             var isExtraElements = HasAttribute(member, attrs.ExtraElements);
             var extraElementsKind = ExtraElementsKind.None;
@@ -245,11 +300,27 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 (extraElementsKind, extraElementsCtor) = ClassifyExtraElementsMember(memberType);
             }
 
+            var primitiveKind = ClassifyPrimitive(memberType);
+            var representation = GetRepresentationEnumName(member, attrs.Representation);
+            var customSerializer = GetAttributeTypeArgument(member, attrs.Serializer);
+
+            // DefaultGuidRepresentation only applies to Guid members and only when no per-member
+            // attribute already wins. The per-member [BsonRepresentation] / [BsonSerializer] are
+            // explicit user intent at the member level and should not be overridden by a context
+            // default.
+            string? guidRepresentationOverride = null;
+            if (primitiveKind == PrimitiveKind.Guid &&
+                representation is null &&
+                customSerializer is null)
+            {
+                guidRepresentationOverride = options.DefaultGuidRepresentation;
+            }
+
             return new MemberToGenerate(
                 Name: member.Name,
                 ElementName: ResolveElementName(member, member.Name, declaringTypeName, attrs, typeHasNoId),
                 TypeFullName: memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                PrimitiveKind: ClassifyPrimitive(memberType),
+                PrimitiveKind: primitiveKind,
                 AllowsNull: AllowsNull(memberType),
                 IsExtraElements: isExtraElements && extraElementsKind != ExtraElementsKind.None,
                 ExtraElementsKind: extraElementsKind,
@@ -258,8 +329,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 IgnoreIfDefault: HasAttribute(member, attrs.IgnoreIfDefault),
                 Required: HasAttribute(member, attrs.Required),
                 DefaultValueExpression: GetDefaultValueExpression(member, attrs.DefaultValue),
-                RepresentationBsonType: GetRepresentationEnumName(member, attrs.Representation),
-                CustomSerializerTypeFullName: GetAttributeTypeArgument(member, attrs.Serializer),
+                RepresentationBsonType: representation,
+                CustomSerializerTypeFullName: customSerializer,
+                GuidRepresentationOverride: guidRepresentationOverride,
                 IsInitOnly: isInitOnly,
                 IsRequired: isRequired);
         }

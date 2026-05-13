@@ -52,6 +52,13 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         string? DefaultValueExpression,
         string? RepresentationBsonType,
         string? CustomSerializerTypeFullName,
+        // Effective Guid representation for this member after folding the layered options
+        // (context → per-[BsonSerializable] → per-POCO). Null means "no context-level opinion;
+        // emit the standard inline / LookupSerializer path." A non-null value names the
+        // GuidRepresentation enum field (e.g. "Standard") that the emit splices into
+        // `new GuidSerializer(GuidRepresentation.<name>)`. Per-member [BsonRepresentation] or
+        // [BsonSerializer] still win over this — those are populated above and checked first.
+        string? GuidRepresentationOverride,
         bool IsInitOnly,
         bool IsRequired);
 
