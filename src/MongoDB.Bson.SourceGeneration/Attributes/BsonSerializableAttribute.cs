@@ -44,11 +44,5 @@ namespace MongoDB.Bson.Serialization.Attributes
         /// Gets the type to generate a BSON serializer for.
         /// </summary>
         public Type Type => _type;
-
-        /// <summary>
-        /// Overrides the property naming policy from
-        /// <see cref="BsonSourceGenerationOptionsAttribute.PropertyNamingPolicy"/> for this type only.
-        /// </summary>
-        public BsonNamingPolicy PropertyNamingPolicy { get; set; }
     }
 }
