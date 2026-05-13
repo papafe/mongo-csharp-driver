@@ -16,50 +16,44 @@
 using FluentAssertions;
 using MongoDB.Bson.Serialization;
 using Xunit;
-using static MongoDB.Bson.SourceGeneration.Tests.SerializationTestHelpers;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    public class MixedShapeTests
+    // What counts as a member, and in what order: public fields are first-class members, and
+    // mixed-shape types emit fields before properties to match the runtime's
+    // ReadWriteMemberFinderConvention.
+    public class MemberDiscoveryTests
     {
-        static MixedShapeTests()
+        static MemberDiscoveryTests()
         {
             TestContext.Default.Register();
         }
 
         [Fact]
+        public void Public_Fields_Round_Trip_Like_Properties()
+        {
+            var original = new Coordinates { Latitude = 51.4934, Longitude = 0.0098, Label = "Greenwich" };
+            var bytes = original.ToBson();
+            var result = BsonSerializer.Deserialize<Coordinates>(bytes);
+
+            result.Latitude.Should().Be(original.Latitude);
+            result.Longitude.Should().Be(original.Longitude);
+            result.Label.Should().Be(original.Label);
+        }
+
+        [Fact]
         public void Fields_Are_Emitted_Before_Properties()
         {
-            var v = NewSample();
+            var v = new MixedShape { FirstField = 1, SecondField = 2, FirstProperty = "one", SecondProperty = "two" };
             var doc = BsonDocument.Parse(v.ToJson());
 
-            // The runtime's ReadWriteMemberFinderConvention maps fields, then properties,
-            // each in source order. So the wire layout is: FirstField, SecondField,
-            // FirstProperty, SecondProperty.
+            // ReadWriteMemberFinderConvention maps fields first, then properties, each in source
+            // order — wire layout: FirstField, SecondField, FirstProperty, SecondProperty.
             doc.ElementCount.Should().Be(4);
             doc.GetElement(0).Name.Should().Be("FirstField");
             doc.GetElement(1).Name.Should().Be("SecondField");
             doc.GetElement(2).Name.Should().Be("FirstProperty");
             doc.GetElement(3).Name.Should().Be("SecondProperty");
         }
-
-        [Fact]
-        public void Wire_Format_Matches_Reflection()
-        {
-            var v = NewSample();
-            var generated = BsonSerializer.LookupSerializer<MixedShape>();
-            var reflection = BuildReflectionSerializer<MixedShape>();
-
-            SerializeUsing(generated, v).Should()
-                .BeEquivalentTo(SerializeUsing(reflection, v));
-        }
-
-        private static MixedShape NewSample() => new MixedShape
-        {
-            FirstField = 1,
-            SecondField = 2,
-            FirstProperty = "one",
-            SecondProperty = "two"
-        };
     }
 }

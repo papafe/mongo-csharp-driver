@@ -16,13 +16,15 @@
 using FluentAssertions;
 using MongoDB.Bson.Serialization;
 using Xunit;
-using static MongoDB.Bson.SourceGeneration.Tests.SerializationTestHelpers;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    public class AnimalTests
+    // [BsonDiscriminator] + [BsonKnownTypes] for Animal/Cat/Dog. Covers _t emission on both root
+    // and subtypes, subtype dispatch on serialize and deserialize, and the inheritance walk that
+    // pulls base-class members into a derived serializer.
+    public class PolymorphismTests
     {
-        static AnimalTests()
+        static PolymorphismTests()
         {
             TestContext.Default.Register();
         }
@@ -48,9 +50,6 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [Fact]
         public void Serialize_Through_Base_Dispatches_To_Subtype_Serializer()
         {
-            // Reference of static type Animal but actual type Cat. The generated AnimalSerializer
-            // must check value.GetType() and dispatch to CatSerializer, otherwise the LikesYarn
-            // member would be lost and _t would say "Animal".
             Animal asAnimal = new Cat { Id = ObjectId.GenerateNewId(), Name = "Whiskers", LikesYarn = true };
             var doc = BsonDocument.Parse(asAnimal.ToJson<Animal>());
 
@@ -95,8 +94,8 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [Fact]
         public void Inherited_Members_Are_Round_Tripped_On_Subtype()
         {
-            // Name lives on Animal; the source-generated CatSerializer needs to include it because
-            // the extractor walks base types to gather inherited members.
+            // Name lives on Animal; CatSerializer needs to include it because the extractor walks
+            // base types to gather inherited members.
             var cat = new Cat { Id = ObjectId.GenerateNewId(), Name = "Whiskers", LikesYarn = true };
             var bytes = cat.ToBson();
             var result = BsonSerializer.Deserialize<Cat>(bytes);
@@ -104,63 +103,6 @@ namespace MongoDB.Bson.SourceGeneration.Tests
             result.Id.Should().Be(cat.Id);
             result.Name.Should().Be("Whiskers");
             result.LikesYarn.Should().BeTrue();
-        }
-
-        [Fact]
-        public void Wire_Format_Matches_Reflection_For_Cat()
-        {
-            Animal cat = new Cat { Id = ObjectId.GenerateNewId(), Name = "Whiskers", LikesYarn = true };
-            var generated = BsonSerializer.LookupSerializer<Animal>();
-            var reflection = BuildReflectionSerializer<Animal>();
-
-            SerializeUsing(generated, cat).Should()
-                .BeEquivalentTo(SerializeUsing(reflection, cat));
-        }
-
-        [Fact]
-        public void Wire_Format_Matches_Reflection_For_Dog()
-        {
-            Animal dog = new Dog { Id = ObjectId.GenerateNewId(), Name = "Rex", Breed = "Labrador" };
-            var generated = BsonSerializer.LookupSerializer<Animal>();
-            var reflection = BuildReflectionSerializer<Animal>();
-
-            SerializeUsing(generated, dog).Should()
-                .BeEquivalentTo(SerializeUsing(reflection, dog));
-        }
-
-        [Fact]
-        public void Wire_Format_Matches_Reflection_For_Animal_Itself()
-        {
-            var a = new Animal { Id = ObjectId.GenerateNewId(), Name = "Generic" };
-            var generated = BsonSerializer.LookupSerializer<Animal>();
-            var reflection = BuildReflectionSerializer<Animal>();
-
-            SerializeUsing(generated, a).Should()
-                .BeEquivalentTo(SerializeUsing(reflection, a));
-        }
-
-        [Fact]
-        public void Four_Way_Cross_Deserialization_Round_Trips_Subtype()
-        {
-            Animal original = new Cat { Id = ObjectId.GenerateNewId(), Name = "Whiskers", LikesYarn = true };
-            var generated = BsonSerializer.LookupSerializer<Animal>();
-            var reflection = BuildReflectionSerializer<Animal>();
-
-            var bytesGen = SerializeUsing(generated, original);
-            var bytesRefl = SerializeUsing(reflection, original);
-
-            foreach (var (label, value) in new[]
-                     {
-                         ("gen->gen", DeserializeUsing(generated, bytesGen)),
-                         ("gen->refl", DeserializeUsing(reflection, bytesGen)),
-                         ("refl->gen", DeserializeUsing(generated, bytesRefl)),
-                         ("refl->refl", DeserializeUsing(reflection, bytesRefl)),
-                     })
-            {
-                value.Should().BeOfType<Cat>(label);
-                value.Name.Should().Be("Whiskers", label);
-                ((Cat)value).LikesYarn.Should().BeTrue(label);
-            }
         }
     }
 }

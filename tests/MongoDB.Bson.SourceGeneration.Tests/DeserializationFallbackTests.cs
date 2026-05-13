@@ -1,4 +1,4 @@
-﻿/* Copyright 2010-present MongoDB Inc.
+/* Copyright 2010-present MongoDB Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -19,9 +19,12 @@ using Xunit;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    public class SubscriptionTests
+    // Behavior when a member is missing from the BSON document at deserialize time.
+    //   [BsonRequired]     — throws BsonSerializationException with the member name.
+    //   [BsonDefaultValue] — assigns the literal default; skipped if the element is present.
+    public class DeserializationFallbackTests
     {
-        static SubscriptionTests()
+        static DeserializationFallbackTests()
         {
             TestContext.Default.Register();
         }
@@ -29,7 +32,6 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [Fact]
         public void Required_Member_Missing_Throws_On_Deserialize()
         {
-            // BSON without the "Plan" member.
             var wire = new BsonDocument
             {
                 { "_id", ObjectId.GenerateNewId() },
@@ -43,9 +45,8 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         }
 
         [Fact]
-        public void DefaultValue_String_Applied_When_Member_Missing()
+        public void DefaultValue_Applied_When_Member_Missing()
         {
-            // BSON without BillingPeriod or MaxUsers.
             var wire = new BsonDocument
             {
                 { "_id", ObjectId.GenerateNewId() },
@@ -60,7 +61,7 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         }
 
         [Fact]
-        public void Default_Value_Skipped_When_Member_Present()
+        public void DefaultValue_Skipped_When_Member_Present()
         {
             var wire = new BsonDocument
             {

@@ -13,17 +13,18 @@
 * limitations under the License.
 */
 
+using System;
 using System.IO;
+using FluentAssertions;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    // Helpers shared by every per-POCO parity test. The reflection serializer is
-    // constructed directly from a frozen BsonClassMap so that it bypasses
-    // BsonSerializer's registry — which the generated context intercepts for any
-    // type listed in TestContext.
+    // Helpers shared by every parity-style test. The reflection serializer is constructed directly
+    // from a frozen BsonClassMap so that it bypasses BsonSerializer's registry — which the
+    // generated context intercepts for any type listed in TestContext.
     internal static class SerializationTestHelpers
     {
         public static IBsonSerializer<T> BuildReflectionSerializer<T>()
@@ -52,6 +53,32 @@ namespace MongoDB.Bson.SourceGeneration.Tests
             var context = BsonDeserializationContext.CreateRoot(reader);
             var args = new BsonDeserializationArgs { NominalType = typeof(T) };
             return serializer.Deserialize(context, args);
+        }
+
+        // Asserts that the generator's output for `sample` is byte-identical to what
+        // BsonClassMapSerializer<T> produces — the strong contract on the wire layer.
+        public static void AssertByteIdenticalToReflection<T>(T sample)
+        {
+            var generated = BsonSerializer.LookupSerializer<T>();
+            var reflection = BuildReflectionSerializer<T>();
+            SerializeUsing(generated, sample).Should()
+                .BeEquivalentTo(SerializeUsing(reflection, sample));
+        }
+
+        // Runs every (serializer × deserializer) combination over `sample` and applies the caller's
+        // assertion to each result. Lets a single test prove the generator and reflection paths
+        // round-trip equal in-memory values, including cross-deserialization between the two paths.
+        public static void AssertFourWayCross<T>(T sample, Action<string, T> assert)
+        {
+            var generated = BsonSerializer.LookupSerializer<T>();
+            var reflection = BuildReflectionSerializer<T>();
+            var bytesGen = SerializeUsing(generated, sample);
+            var bytesRefl = SerializeUsing(reflection, sample);
+
+            assert("gen->gen", DeserializeUsing(generated, bytesGen));
+            assert("gen->refl", DeserializeUsing(reflection, bytesGen));
+            assert("refl->gen", DeserializeUsing(generated, bytesRefl));
+            assert("refl->refl", DeserializeUsing(reflection, bytesRefl));
         }
     }
 }

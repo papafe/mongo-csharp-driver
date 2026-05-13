@@ -1,4 +1,4 @@
-﻿/* Copyright 2010-present MongoDB Inc.
+/* Copyright 2010-present MongoDB Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -19,15 +19,18 @@ using Xunit;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    public class SimplePersonRoundTripTests
+    // End-to-end sanity: the generator runs, the registry hands out the generated serializer
+    // ahead of the reflection-based provider, and the emitted wire format matches a canonical
+    // BsonDocument with the same field order.
+    public class RoundTripTests
     {
-        static SimplePersonRoundTripTests()
+        static RoundTripTests()
         {
             TestContext.Default.Register();
         }
 
         [Fact]
-        public void RoundTrip_ViaBsonSerializer_PreservesAllFields()
+        public void RoundTrip_Via_BsonSerializer_Preserves_All_Fields()
         {
             var original = new SimplePerson
             {
@@ -47,7 +50,6 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [Fact]
         public void Generated_Serializer_Is_Used_Not_Reflection()
         {
-            // Verifies the context's GetSerializer wins over the reflection-based provider.
             var serializer = BsonSerializer.LookupSerializer<SimplePerson>();
             serializer.GetType().Name.Should().Be("SimplePersonSerializer");
         }
@@ -55,8 +57,6 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [Fact]
         public void Wire_Format_Matches_Canonical_BsonDocument()
         {
-            // Sanity check the emitted shape: the bytes our serializer produces must equal
-            // the canonical BSON for an equivalent BsonDocument with the same field order.
             var id = ObjectId.GenerateNewId();
             var person = new SimplePerson { Id = id, Name = "Ada Lovelace", Age = 36 };
 

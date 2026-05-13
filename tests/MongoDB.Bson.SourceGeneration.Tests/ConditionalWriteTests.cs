@@ -1,4 +1,4 @@
-﻿/* Copyright 2010-present MongoDB Inc.
+/* Copyright 2010-present MongoDB Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -14,21 +14,21 @@
 */
 
 using FluentAssertions;
-using MongoDB.Bson.Serialization;
 using Xunit;
-using static MongoDB.Bson.SourceGeneration.Tests.SerializationTestHelpers;
 
 namespace MongoDB.Bson.SourceGeneration.Tests
 {
-    public class CustomerTests
+    // [BsonIgnoreIfNull] and [BsonIgnoreIfDefault]: conditional writes that omit the element
+    // when the member's value matches the trigger condition.
+    public class ConditionalWriteTests
     {
-        static CustomerTests()
+        static ConditionalWriteTests()
         {
             TestContext.Default.Register();
         }
 
         [Fact]
-        public void IgnoreIfNull_Omits_Null_Email()
+        public void IgnoreIfNull_Omits_Null_Reference_Member()
         {
             var c = new Customer { Id = ObjectId.GenerateNewId(), Email = null, LoyaltyPoints = 50 };
             var doc = BsonDocument.Parse(c.ToJson());
@@ -38,7 +38,7 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         }
 
         [Fact]
-        public void IgnoreIfNull_Writes_NonNull_Email()
+        public void IgnoreIfNull_Writes_NonNull_Reference_Member()
         {
             var c = new Customer { Id = ObjectId.GenerateNewId(), Email = "ada@example.com", LoyaltyPoints = 50 };
             var doc = BsonDocument.Parse(c.ToJson());
@@ -48,7 +48,7 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         }
 
         [Fact]
-        public void IgnoreIfDefault_Omits_Zero_LoyaltyPoints()
+        public void IgnoreIfDefault_Omits_Default_Value_Member()
         {
             var c = new Customer { Id = ObjectId.GenerateNewId(), Email = "ada@example.com", LoyaltyPoints = 0 };
             var doc = BsonDocument.Parse(c.ToJson());
@@ -58,25 +58,13 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         }
 
         [Fact]
-        public void IgnoreIfDefault_Writes_NonZero_LoyaltyPoints()
+        public void IgnoreIfDefault_Writes_NonDefault_Value_Member()
         {
             var c = new Customer { Id = ObjectId.GenerateNewId(), Email = "ada@example.com", LoyaltyPoints = 42 };
             var doc = BsonDocument.Parse(c.ToJson());
 
             doc.Contains("LoyaltyPoints").Should().BeTrue();
             doc["LoyaltyPoints"].AsInt32.Should().Be(42);
-        }
-
-        [Fact]
-        public void Wire_Format_Matches_Reflection_With_Mixed_Values()
-        {
-            // Combine null email + non-zero points to exercise both conditions in one wire.
-            var c = new Customer { Id = ObjectId.GenerateNewId(), Email = null, LoyaltyPoints = 7 };
-            var generated = BsonSerializer.LookupSerializer<Customer>();
-            var reflection = BuildReflectionSerializer<Customer>();
-
-            SerializeUsing(generated, c).Should()
-                .BeEquivalentTo(SerializeUsing(reflection, c));
         }
     }
 }
