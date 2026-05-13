@@ -42,6 +42,7 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(AppSettings))]
     [BsonSerializable(typeof(Geo.Marker))]
     [BsonSerializable(typeof(Site.Marker))]
+    [BsonSerializable(typeof(MarkerPair))]
     [BsonSerializable(typeof(Vehicle))]
     [BsonSerializable(typeof(Car))]
     [BsonSerializable(typeof(Entity))]

@@ -140,7 +140,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             // subtype (or throws) and Serialize forwards on `value.GetType()`. No DeserializeCore.
             if (type.ConstructionStrategy != ConstructionStrategy.Abstract)
             {
-                EmitDeserializeCore(sb, type, i);
+                EmitDeserializeCore(sb, type, typesByFullName, i);
             }
             EmitSerialize(sb, type, typesByFullName, i);
 
@@ -286,7 +286,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         // honored when the BSON omits them; the local stays at `default(T)` and overwrites
         // whatever the class-level initializer set. Matches the reflection path's
         // `FormatterServices.GetUninitializedObject` behavior for types without a parameterless ctor.
-        private static void EmitDeserializeCore(StringBuilder sb, TypeToGenerate type, string indent)
+        private static void EmitDeserializeCore(StringBuilder sb, TypeToGenerate type, Dictionary<string, TypeToGenerate> typesByFullName, string indent)
         {
             // "Was this element seen?" tracking drives [BsonRequired] (throw if missing) and
             // [BsonDefaultValue] (assign default if missing) after the read loop.
@@ -340,7 +340,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             {
                 if (m.IsExtraElements) { continue; }
                 sb.Append(i).Append("            case \"").Append(m.ElementName).Append("\": ").Append(TargetOf(m)).Append(" = ");
-                EmitReadExpression(sb, m);
+                EmitReadExpression(sb, m, typesByFullName);
                 sb.Append(";");
                 if (trackedNames.Contains(m.Name))
                 {
@@ -590,7 +590,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 }
                 else
                 {
-                    EmitMemberWrite(sb, m, i);
+                    EmitMemberWrite(sb, m, typesByFullName, i);
                 }
             }
 
@@ -657,7 +657,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).AppendLine("    }");
         }
 
-        private static void EmitMemberWrite(StringBuilder sb, MemberToGenerate m, string indent)
+        private static void EmitMemberWrite(StringBuilder sb, MemberToGenerate m, Dictionary<string, TypeToGenerate> typesByFullName, string indent)
         {
             // Decide whether to wrap the WriteName + Write pair in a condition.
             // - [BsonIgnoreIfDefault] subsumes [BsonIgnoreIfNull] for reference types (default == null) and
@@ -679,7 +679,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             {
                 sb.Append(indent).Append("    writer.WriteName(\"").Append(m.ElementName).AppendLine("\");");
                 sb.Append(indent).Append("    ");
-                EmitWriteStatement(sb, m);
+                EmitWriteStatement(sb, m, typesByFullName);
                 sb.AppendLine();
                 return;
             }
@@ -688,12 +688,20 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).AppendLine("    {");
             sb.Append(indent).Append("        writer.WriteName(\"").Append(m.ElementName).AppendLine("\");");
             sb.Append(indent).Append("        ");
-            EmitWriteStatement(sb, m);
+            EmitWriteStatement(sb, m, typesByFullName);
             sb.AppendLine();
             sb.Append(indent).AppendLine("    }");
         }
 
-        private static void EmitReadExpression(StringBuilder sb, MemberToGenerate member)
+        // Read precedence:
+        //   1. [BsonSerializer] / [BsonRepresentation] override → cached per-member serializer field.
+        //   2. Inline primitive read (`reader.ReadInt32()` etc.).
+        //   3. Same-context type → cached static field on the partial context (avoids the registry
+        //      lookup + cast that the fallback would emit). Lookup is by *full name*, so two types
+        //      sharing a short name across namespaces (`Geo.Marker` / `Site.Marker`) each route to
+        //      their correctly-disambiguated `s_<x>Serializer` field.
+        //   4. Otherwise fall back to `BsonSerializer.LookupSerializer(typeof(T))`.
+        private static void EmitReadExpression(StringBuilder sb, MemberToGenerate member, Dictionary<string, TypeToGenerate> typesByFullName)
         {
             if (GetMemberSerializerOverride(member) is not null)
             {
@@ -703,21 +711,29 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             switch (member.PrimitiveKind)
             {
-                case PrimitiveKind.Boolean: sb.Append("reader.ReadBoolean()"); break;
-                case PrimitiveKind.Int32: sb.Append("reader.ReadInt32()"); break;
-                case PrimitiveKind.Int64: sb.Append("reader.ReadInt64()"); break;
-                case PrimitiveKind.Double: sb.Append("reader.ReadDouble()"); break;
-                case PrimitiveKind.String: sb.Append("reader.ReadString()"); break;
-                case PrimitiveKind.ObjectId: sb.Append("reader.ReadObjectId()"); break;
-                case PrimitiveKind.Decimal128: sb.Append("reader.ReadDecimal128()"); break;
-                default:
-                    sb.Append("(").Append(member.TypeFullName).Append(")global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(")
-                      .Append(member.TypeFullName).Append(")).Deserialize(context, args)");
-                    break;
+                case PrimitiveKind.Boolean: sb.Append("reader.ReadBoolean()"); return;
+                case PrimitiveKind.Int32: sb.Append("reader.ReadInt32()"); return;
+                case PrimitiveKind.Int64: sb.Append("reader.ReadInt64()"); return;
+                case PrimitiveKind.Double: sb.Append("reader.ReadDouble()"); return;
+                case PrimitiveKind.String: sb.Append("reader.ReadString()"); return;
+                case PrimitiveKind.ObjectId: sb.Append("reader.ReadObjectId()"); return;
+                case PrimitiveKind.Decimal128: sb.Append("reader.ReadDecimal128()"); return;
             }
+
+            if (typesByFullName.TryGetValue(member.TypeFullName, out var inContextType))
+            {
+                // Direct call on the cached field — returns the typed T so no cast is needed.
+                sb.Append(SerializerFieldName(inContextType)).Append(".Deserialize(context, args)");
+                return;
+            }
+
+            sb.Append("(").Append(member.TypeFullName).Append(")global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(")
+              .Append(member.TypeFullName).Append(")).Deserialize(context, args)");
         }
 
-        private static void EmitWriteStatement(StringBuilder sb, MemberToGenerate member)
+        // Mirrors EmitReadExpression's precedence: per-member override, inline primitive, same-context
+        // direct call, registry fallback.
+        private static void EmitWriteStatement(StringBuilder sb, MemberToGenerate member, Dictionary<string, TypeToGenerate> typesByFullName)
         {
             if (GetMemberSerializerOverride(member) is not null)
             {
@@ -728,18 +744,24 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             switch (member.PrimitiveKind)
             {
-                case PrimitiveKind.Boolean: sb.Append("writer.WriteBoolean(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.Int32: sb.Append("writer.WriteInt32(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.Int64: sb.Append("writer.WriteInt64(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.Double: sb.Append("writer.WriteDouble(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.String: sb.Append("writer.WriteString(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.ObjectId: sb.Append("writer.WriteObjectId(value.").Append(member.Name).Append(");"); break;
-                case PrimitiveKind.Decimal128: sb.Append("writer.WriteDecimal128(value.").Append(member.Name).Append(");"); break;
-                default:
-                    sb.Append("global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(").Append(member.TypeFullName)
-                      .Append(")).Serialize(context, args, value.").Append(member.Name).Append(");");
-                    break;
+                case PrimitiveKind.Boolean: sb.Append("writer.WriteBoolean(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.Int32: sb.Append("writer.WriteInt32(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.Int64: sb.Append("writer.WriteInt64(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.Double: sb.Append("writer.WriteDouble(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.String: sb.Append("writer.WriteString(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.ObjectId: sb.Append("writer.WriteObjectId(value.").Append(member.Name).Append(");"); return;
+                case PrimitiveKind.Decimal128: sb.Append("writer.WriteDecimal128(value.").Append(member.Name).Append(");"); return;
             }
+
+            if (typesByFullName.TryGetValue(member.TypeFullName, out var inContextType))
+            {
+                sb.Append(SerializerFieldName(inContextType)).Append(".Serialize(context, args, value.")
+                  .Append(member.Name).Append(");");
+                return;
+            }
+
+            sb.Append("global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(").Append(member.TypeFullName)
+              .Append(")).Serialize(context, args, value.").Append(member.Name).Append(");");
         }
 
         // Decides whether a member needs a cached per-member serializer instance, and if so,

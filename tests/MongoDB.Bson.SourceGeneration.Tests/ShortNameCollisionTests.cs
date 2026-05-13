@@ -51,5 +51,25 @@ namespace MongoDB.Bson.SourceGeneration.Tests
             rg.Value.Should().Be(3.14);
             rs.Tag.Should().Be("alpha");
         }
+
+        // The direct-call optimization routes each nested member to its in-context cached field.
+        // When two types share a short name, the lookup must go by full name so the correctly-
+        // disambiguated serializer ends up in the emit. Round-tripping a POCO that holds both
+        // confirms the routing — if the wrong serializer were picked, the *other* member would
+        // round-trip as the wrong type (or fail to compile in the first place).
+        [Fact]
+        public void Member_Of_Each_Colliding_Type_Is_Routed_To_Correct_Serializer()
+        {
+            var p = new MarkerPair
+            {
+                GeoMarker = new Geo.Marker { Value = 2.5 },
+                SiteMarker = new Site.Marker { Tag = "beta" }
+            };
+
+            var result = BsonSerializer.Deserialize<MarkerPair>(p.ToBson());
+
+            result.GeoMarker.Value.Should().Be(2.5);
+            result.SiteMarker.Tag.Should().Be("beta");
+        }
     }
 }
