@@ -53,6 +53,9 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(Account))]
     [BsonSerializable(typeof(SavingsAccount))]
     [BsonSerializable(typeof(CheckingAccount))]
+    [BsonSerializable(typeof(WithCollections))]
+    [BsonSerializable(typeof(Widget))]
+    [BsonSerializable(typeof(IThing))]
     public partial class TestContext : BsonSerializerContext
     {
     }
