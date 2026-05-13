@@ -64,10 +64,14 @@ namespace MongoDB.Bson.SourceGeneration.Generator
     //   Parameterless     — type has a public parameterless ctor; emitter uses `new T()`.
     //   ParameterizedCtor — no parameterless ctor; emitter calls a single non-private ctor with
     //                       positional arguments matched to members by case-insensitive name.
+    //   Abstract          — type is abstract; we never construct it. The emitter skips
+    //                       DeserializeCore and emits Deserialize/Serialize as pure dispatch
+    //                       (route to a concrete subtype, or throw / fall back to runtime).
     internal enum ConstructionStrategy
     {
         Parameterless,
-        ParameterizedCtor
+        ParameterizedCtor,
+        Abstract
     }
 
     // Primitives we read/write directly via BsonReader/BsonWriter without recursing

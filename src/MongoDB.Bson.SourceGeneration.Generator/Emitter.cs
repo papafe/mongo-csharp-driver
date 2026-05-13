@@ -136,7 +136,12 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             EmitMemberSerializerFields(sb, type, i);
             EmitDeserialize(sb, type, typesByFullName, i);
-            EmitDeserializeCore(sb, type, i);
+            // Abstract types are never constructed by us — Deserialize dispatches to a concrete
+            // subtype (or throws) and Serialize forwards on `value.GetType()`. No DeserializeCore.
+            if (type.ConstructionStrategy != ConstructionStrategy.Abstract)
+            {
+                EmitDeserializeCore(sb, type, i);
+            }
             EmitSerialize(sb, type, typesByFullName, i);
 
             sb.Append(i).AppendLine("}");
@@ -180,7 +185,10 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(i).AppendLine("    }");
             sb.Append(i).AppendLine();
 
-            if (type.KnownTypeFullNames.Count > 0)
+            // Abstract types always go through dispatch — no DeserializeCore exists, and the
+            // case-null / case-self arms inside the dispatch will throw with a clear message
+            // when the wire data points at the abstract type itself.
+            if (type.KnownTypeFullNames.Count > 0 || type.ConstructionStrategy == ConstructionStrategy.Abstract)
             {
                 EmitDeserializeDiscriminatorDispatch(sb, type, typesByFullName, i);
             }
@@ -222,7 +230,19 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).AppendLine("    {");
             sb.Append(indent).AppendLine("        case null:");
             sb.Append(indent).Append("        case \"").Append(type.Discriminator).AppendLine("\":");
-            sb.Append(indent).AppendLine("            return DeserializeCore(context, args);");
+            if (type.ConstructionStrategy == ConstructionStrategy.Abstract)
+            {
+                // Abstract types can't be instantiated; matching the nominal discriminator (or
+                // missing one entirely) means the wire data is unrecoverable for this nominal
+                // type. Mirrors what reflection does when `FormatterServices.GetUninitializedObject`
+                // is asked to allocate an abstract instance.
+                sb.Append(indent).Append("            throw new global::MongoDB.Bson.BsonSerializationException(\"Cannot deserialize abstract type ")
+                  .Append(type.TypeFullName).AppendLine(" — the BSON document has no _t discriminator or _t references the abstract type itself; expected one of the registered subtypes.\");");
+            }
+            else
+            {
+                sb.Append(indent).AppendLine("            return DeserializeCore(context, args);");
+            }
 
             foreach (var subtypeFullName in type.KnownTypeFullNames)
             {
@@ -528,6 +548,20 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 sb.Append(i).AppendLine("        return;");
                 sb.Append(i).AppendLine("    }");
                 sb.AppendLine();
+            }
+
+            // Abstract types: every non-null instance has a concrete `value.GetType()`, so the
+            // dispatch is the only path that runs. Skip the WriteStartDocument tail — it'd be
+            // unreachable code. The trailing throw is a defensive net in case the dispatch
+            // wrapper's `if (actualType != typeof(T))` ever falls through (it can't at runtime
+            // since you can't instantiate an abstract class).
+            if (type.ConstructionStrategy == ConstructionStrategy.Abstract)
+            {
+                EmitSerializeDiscriminatorDispatch(sb, type, typesByFullName, i);
+                sb.Append(i).Append("    throw new global::MongoDB.Bson.BsonSerializationException(\"Cannot serialize abstract type ")
+                  .Append(type.TypeFullName).AppendLine(" directly — no concrete subtype matched value.GetType().\");");
+                sb.Append(i).AppendLine("}");
+                return;
             }
 
             // Polymorphic dispatch on the actual runtime type. Mirrors BsonClassMapSerializer.cs:649-665

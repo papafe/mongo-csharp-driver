@@ -49,6 +49,9 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(Article))]
     [BsonSerializable(typeof(Plant))]
     [BsonSerializable(typeof(Flower))]
+    [BsonSerializable(typeof(Account))]
+    [BsonSerializable(typeof(SavingsAccount))]
+    [BsonSerializable(typeof(CheckingAccount))]
     public partial class TestContext : BsonSerializerContext
     {
     }

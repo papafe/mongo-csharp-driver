@@ -162,14 +162,19 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 members.AddRange(level.Properties);
             }
 
-            if (members.Count == 0) { return null; }
+            var ctorResult = DetermineConstructionStrategy(type);
+            if (ctorResult is null) { return null; }
+
+            // Concrete types must have at least one serializable member; an abstract polymorphic
+            // root is allowed to have none of its own (its job is to dispatch, not to carry data).
+            if (members.Count == 0 && ctorResult.Value.Strategy != ConstructionStrategy.Abstract)
+            {
+                return null;
+            }
 
             var (discriminator, isRootClass, discriminatorRequired) = ExtractDiscriminator(type, attrs);
             var hasRootAncestor = HasRootAncestor(type, attrs);
             var knownTypes = ExtractKnownTypeFullNames(type, attrs);
-
-            var ctorResult = DetermineConstructionStrategy(type);
-            if (ctorResult is null) { return null; }
 
             return new TypeToGenerate(
                 TypeFullName: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -264,14 +269,22 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         //   2. Otherwise, take the single public instance ctor; emit `new T(p1, p2, ...)` with
         //      members matched to params by case-insensitive name (matches the runtime's
         //      `NamedParameterCreatorMapConvention`).
-        // If neither holds (e.g. multiple non-private ctors with no parameterless), we skip the
-        // type for v1. A diagnostic in #6 should surface this so users know to add a
+        //   3. Abstract types are valid as polymorphic roots — we never construct one, so we
+        //      return a dedicated strategy that tells the emitter to skip DeserializeCore and
+        //      emit pure-dispatch Deserialize / Serialize.
+        // If none of those hold (e.g. multiple non-private ctors with no parameterless), we skip
+        // the type for v1. A diagnostic in #6 should surface this so users know to add a
         // `[BsonConstructor]` or expose a parameterless ctor.
         private static (ConstructionStrategy Strategy, EquatableArray<CtorParameter> Parameters)? DetermineConstructionStrategy(INamedTypeSymbol type)
         {
-            if (type.IsAbstract || type.IsStatic)
+            if (type.IsStatic)
             {
                 return null;
+            }
+
+            if (type.IsAbstract)
+            {
+                return (ConstructionStrategy.Abstract, new EquatableArray<CtorParameter>(ImmutableArray<CtorParameter>.Empty));
             }
 
             IMethodSymbol? parameterless = null;
