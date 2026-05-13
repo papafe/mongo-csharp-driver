@@ -34,11 +34,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.AppendLine();
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
-            sb.AppendLine("using System;");
-            sb.AppendLine("using MongoDB.Bson.IO;");
-            sb.AppendLine("using MongoDB.Bson.Serialization;");
-            sb.AppendLine("using MongoDB.Bson.Serialization.Serializers;");
-            sb.AppendLine();
+            // No using directives: every emitted type name is global::-qualified so the file
+            // compiles regardless of what's in scope at the consumer's namespace.
 
             string indent;
             if (hasNamespace)
@@ -99,7 +96,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
         private static void EmitGetSerializer(StringBuilder sb, ContextInfo context, string indent)
         {
-            sb.Append(indent).AppendLine("    public override IBsonSerializer? GetSerializer(Type type)");
+            sb.Append(indent).AppendLine("    public override global::MongoDB.Bson.Serialization.IBsonSerializer? GetSerializer(global::System.Type type)");
             sb.Append(indent).AppendLine("    {");
 
             foreach (var type in context.Types)
@@ -134,7 +131,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         {
             var i = indent + "    ";
             sb.Append(i).Append("private sealed class ").Append(SerializerClassName(type))
-              .Append(" : SerializerBase<").Append(type.TypeFullName).AppendLine(">");
+              .Append(" : global::MongoDB.Bson.Serialization.Serializers.SerializerBase<").Append(type.TypeFullName).AppendLine(">");
             sb.Append(i).AppendLine("{");
 
             EmitMemberSerializerFields(sb, type, i);
@@ -173,7 +170,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         {
             var i = indent + "    ";
             sb.Append(i).Append("public override ").Append(type.TypeFullName)
-              .AppendLine(" Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)");
+              .AppendLine(" Deserialize(global::MongoDB.Bson.Serialization.BsonDeserializationContext context, global::MongoDB.Bson.Serialization.BsonDeserializationArgs args)");
             sb.Append(i).AppendLine("{");
             sb.Append(i).AppendLine("    var reader = context.Reader;");
             sb.Append(i).AppendLine("    if (reader.GetCurrentBsonType() == global::MongoDB.Bson.BsonType.Null)");
@@ -209,7 +206,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.Append(indent).AppendLine("    var __bookmark = reader.GetBookmark();");
             sb.Append(indent).AppendLine("    reader.ReadStartDocument();");
             sb.Append(indent).AppendLine("    string? __discriminator = null;");
-            sb.Append(indent).AppendLine("    if (reader.FindElement(\"_t\"))");
+            sb.Append(indent).AppendLine("    if (global::MongoDB.Bson.IO.IBsonReaderExtensions.FindElement(reader, \"_t\"))");
             sb.Append(indent).AppendLine("    {");
             sb.Append(indent).AppendLine("        var __bv = global::MongoDB.Bson.Serialization.Serializers.BsonValueSerializer.Instance.Deserialize(context, args);");
             sb.Append(indent).AppendLine("        if (__bv.IsString) { __discriminator = __bv.AsString; }");
@@ -282,7 +279,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             var i = indent + "    ";
 
             sb.Append(i).Append("private static ").Append(type.TypeFullName)
-              .AppendLine(" DeserializeCore(BsonDeserializationContext context, BsonDeserializationArgs args)");
+              .AppendLine(" DeserializeCore(global::MongoDB.Bson.Serialization.BsonDeserializationContext context, global::MongoDB.Bson.Serialization.BsonDeserializationArgs args)");
             sb.Append(i).AppendLine("{");
             sb.Append(i).AppendLine("    var reader = context.Reader;");
             sb.Append(i).AppendLine("    reader.ReadStartDocument();");
@@ -295,7 +292,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             sb.Append(i).AppendLine("    while (reader.ReadBsonType() != global::MongoDB.Bson.BsonType.EndOfDocument)");
             sb.Append(i).AppendLine("    {");
-            sb.Append(i).AppendLine("        var name = reader.ReadName();");
+            sb.Append(i).AppendLine("        var name = global::MongoDB.Bson.IO.IBsonReaderExtensions.ReadName(reader);");
             sb.Append(i).AppendLine("        switch (name)");
             sb.Append(i).AppendLine("        {");
 
@@ -364,7 +361,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             foreach (var m in type.Members) { membersByName[m.Name] = m; }
 
             sb.Append(i).Append("private static ").Append(type.TypeFullName)
-              .AppendLine(" DeserializeCore(BsonDeserializationContext context, BsonDeserializationArgs args)");
+              .AppendLine(" DeserializeCore(global::MongoDB.Bson.Serialization.BsonDeserializationContext context, global::MongoDB.Bson.Serialization.BsonDeserializationArgs args)");
             sb.Append(i).AppendLine("{");
             sb.Append(i).AppendLine("    var reader = context.Reader;");
             sb.Append(i).AppendLine("    reader.ReadStartDocument();");
@@ -381,7 +378,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
             sb.Append(i).AppendLine("    while (reader.ReadBsonType() != global::MongoDB.Bson.BsonType.EndOfDocument)");
             sb.Append(i).AppendLine("    {");
-            sb.Append(i).AppendLine("        var name = reader.ReadName();");
+            sb.Append(i).AppendLine("        var name = global::MongoDB.Bson.IO.IBsonReaderExtensions.ReadName(reader);");
             sb.Append(i).AppendLine("        switch (name)");
             sb.Append(i).AppendLine("        {");
 
@@ -575,7 +572,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             string indent)
         {
             var i = indent + "    ";
-            sb.Append(i).Append("public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, ")
+            sb.Append(i).Append("public override void Serialize(global::MongoDB.Bson.Serialization.BsonSerializationContext context, global::MongoDB.Bson.Serialization.BsonSerializationArgs args, ")
               .Append(type.TypeFullName).AppendLine(" value)");
             sb.Append(i).AppendLine("{");
             sb.Append(i).AppendLine("    var writer = context.Writer;");
@@ -737,7 +734,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 case PrimitiveKind.ObjectId: sb.Append("reader.ReadObjectId()"); break;
                 case PrimitiveKind.Decimal128: sb.Append("reader.ReadDecimal128()"); break;
                 default:
-                    sb.Append("(").Append(member.TypeFullName).Append(")BsonSerializer.LookupSerializer(typeof(")
+                    sb.Append("(").Append(member.TypeFullName).Append(")global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(")
                       .Append(member.TypeFullName).Append(")).Deserialize(context, args)");
                     break;
             }
@@ -762,7 +759,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 case PrimitiveKind.ObjectId: sb.Append("writer.WriteObjectId(value.").Append(member.Name).Append(");"); break;
                 case PrimitiveKind.Decimal128: sb.Append("writer.WriteDecimal128(value.").Append(member.Name).Append(");"); break;
                 default:
-                    sb.Append("BsonSerializer.LookupSerializer(typeof(").Append(member.TypeFullName)
+                    sb.Append("global::MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer(typeof(").Append(member.TypeFullName)
                       .Append(")).Serialize(context, args, value.").Append(member.Name).Append(");");
                     break;
             }
