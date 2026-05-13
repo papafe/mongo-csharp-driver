@@ -143,63 +143,11 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
                     if (member.IsStatic) { continue; }
                     if (member.DeclaredAccessibility != Accessibility.Public) { continue; }
-
-                    ITypeSymbol? memberType = null;
-                    var memberName = member.Name;
-                    var isField = false;
-                    var isInitOnly = false;
-                    var isRequired = false;
-
-                    switch (member)
-                    {
-                        case IPropertySymbol p when p.GetMethod is not null && p.SetMethod is not null:
-                            memberType = p.Type;
-                            isInitOnly = p.SetMethod.IsInitOnly;
-                            isRequired = p.IsRequired;
-                            break;
-                        case IFieldSymbol f when !f.IsConst && !f.IsReadOnly:
-                            memberType = f.Type;
-                            isField = true;
-                            isRequired = f.IsRequired;
-                            break;
-                        default:
-                            continue;
-                    }
-
+                    if (!TryClassifyMember(member, out var memberType, out var isField, out var isInitOnly, out var isRequired)) { continue; }
                     if (HasAttribute(member, attrs.Ignore)) { continue; }
-                    if (!seenNames.Add(memberName)) { continue; } // derived override already added
+                    if (!seenNames.Add(member.Name)) { continue; } // derived override already added
 
-                    var elementName = ResolveElementName(member, memberName, type.Name, attrs, noId);
-
-                    var customSerializerType = GetAttributeTypeArgument(member, attrs.Serializer);
-                    var representation = GetRepresentationEnumName(member, attrs.Representation);
-                    var defaultValueExpr = GetDefaultValueExpression(member, attrs.DefaultValue);
-                    var isExtraElements = HasAttribute(member, attrs.ExtraElements);
-                    var extraElementsKind = ExtraElementsKind.None;
-                    string? extraElementsCtor = null;
-                    if (isExtraElements)
-                    {
-                        (extraElementsKind, extraElementsCtor) = ClassifyExtraElementsMember(memberType);
-                    }
-
-                    var emitted = new MemberToGenerate(
-                        Name: memberName,
-                        ElementName: elementName,
-                        TypeFullName: memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        PrimitiveKind: ClassifyPrimitive(memberType),
-                        AllowsNull: AllowsNull(memberType),
-                        IsExtraElements: isExtraElements && extraElementsKind != ExtraElementsKind.None,
-                        ExtraElementsKind: extraElementsKind,
-                        ExtraElementsConstructor: extraElementsCtor,
-                        IgnoreIfNull: HasAttribute(member, attrs.IgnoreIfNull),
-                        IgnoreIfDefault: HasAttribute(member, attrs.IgnoreIfDefault),
-                        Required: HasAttribute(member, attrs.Required),
-                        DefaultValueExpression: defaultValueExpr,
-                        RepresentationBsonType: representation,
-                        CustomSerializerTypeFullName: customSerializerType,
-                        IsInitOnly: isInitOnly,
-                        IsRequired: isRequired);
-
+                    var emitted = BuildMember(member, memberType, isInitOnly, isRequired, type.Name, noId, attrs);
                     (isField ? fields : properties).Add(emitted);
                 }
 
@@ -235,6 +183,80 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 ConstructionStrategy: ctorResult.Value.Strategy,
                 ConstructorParameters: ctorResult.Value.Parameters,
                 Members: new EquatableArray<MemberToGenerate>(members.ToImmutable()));
+        }
+
+        // True if `member` is a readable+writable property or a non-const, non-readonly field —
+        // the only two shapes we can both deserialize into and serialize from. `out` parameters
+        // give callers what they need without re-pattern-matching: the member's CLR type, whether
+        // it's a field (vs property — drives wire ordering), and the C#-11 init/required flags.
+        private static bool TryClassifyMember(
+            ISymbol member,
+            out ITypeSymbol memberType,
+            out bool isField,
+            out bool isInitOnly,
+            out bool isRequired)
+        {
+            switch (member)
+            {
+                case IPropertySymbol p when p.GetMethod is not null && p.SetMethod is not null:
+                    memberType = p.Type;
+                    isField = false;
+                    isInitOnly = p.SetMethod.IsInitOnly;
+                    isRequired = p.IsRequired;
+                    return true;
+                case IFieldSymbol f when !f.IsConst && !f.IsReadOnly:
+                    memberType = f.Type;
+                    isField = true;
+                    isInitOnly = false;
+                    isRequired = f.IsRequired;
+                    return true;
+                default:
+                    memberType = null!;
+                    isField = false;
+                    isInitOnly = false;
+                    isRequired = false;
+                    return false;
+            }
+        }
+
+        // Reads every per-member attribute we care about and snapshots the result into a
+        // value-equatable `MemberToGenerate`. Pulled out of `ExtractType` so the outer loop
+        // stays focused on "should we include this member" decisions; this method only runs
+        // once the member is known to be in scope.
+        private static MemberToGenerate BuildMember(
+            ISymbol member,
+            ITypeSymbol memberType,
+            bool isInitOnly,
+            bool isRequired,
+            string declaringTypeName,
+            bool typeHasNoId,
+            AttributeSymbols attrs)
+        {
+            var isExtraElements = HasAttribute(member, attrs.ExtraElements);
+            var extraElementsKind = ExtraElementsKind.None;
+            string? extraElementsCtor = null;
+            if (isExtraElements)
+            {
+                (extraElementsKind, extraElementsCtor) = ClassifyExtraElementsMember(memberType);
+            }
+
+            return new MemberToGenerate(
+                Name: member.Name,
+                ElementName: ResolveElementName(member, member.Name, declaringTypeName, attrs, typeHasNoId),
+                TypeFullName: memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                PrimitiveKind: ClassifyPrimitive(memberType),
+                AllowsNull: AllowsNull(memberType),
+                IsExtraElements: isExtraElements && extraElementsKind != ExtraElementsKind.None,
+                ExtraElementsKind: extraElementsKind,
+                ExtraElementsConstructor: extraElementsCtor,
+                IgnoreIfNull: HasAttribute(member, attrs.IgnoreIfNull),
+                IgnoreIfDefault: HasAttribute(member, attrs.IgnoreIfDefault),
+                Required: HasAttribute(member, attrs.Required),
+                DefaultValueExpression: GetDefaultValueExpression(member, attrs.DefaultValue),
+                RepresentationBsonType: GetRepresentationEnumName(member, attrs.Representation),
+                CustomSerializerTypeFullName: GetAttributeTypeArgument(member, attrs.Serializer),
+                IsInitOnly: isInitOnly,
+                IsRequired: isRequired);
         }
 
         // Mirrors what `BsonClassMap` chooses today (`BsonClassMap.cs:1432-1452`):
