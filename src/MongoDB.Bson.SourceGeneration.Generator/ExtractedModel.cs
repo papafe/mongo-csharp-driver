@@ -29,7 +29,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         string TypeShortName,
         bool IsReferenceType,
         bool IgnoreExtraElements,
-        bool NoId,
         string Discriminator,
         bool WriteDiscriminatorWhenSelf,
         EquatableArray<string> KnownTypeFullNames,

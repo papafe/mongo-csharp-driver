@@ -277,7 +277,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 TypeShortName: type.Name,
                 IsReferenceType: type.IsReferenceType,
                 IgnoreExtraElements: ignoreExtraElements,
-                NoId: noId,
                 Discriminator: discriminator ?? type.Name,
                 WriteDiscriminatorWhenSelf: isRootClass || discriminatorRequired || hasRootAncestor,
                 KnownTypeFullNames: knownTypes,

@@ -60,6 +60,10 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(MoneyEntryAsString))]
     [BsonSerializable(typeof(UserAccount))]
     [BsonSerializable(typeof(UserAccountAsString))]
+    [BsonSerializable(typeof(OuterContainer.NestedPocoOne))]
+    [BsonSerializable(typeof(DeepOuter.Middle.DeeplyNestedPoco))]
+    [BsonSerializable(typeof(GeoBox.NestedMarker))]
+    [BsonSerializable(typeof(SiteBox.NestedMarker))]
     public partial class TestContext : BsonSerializerContext
     {
     }
