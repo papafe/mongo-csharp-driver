@@ -71,11 +71,23 @@ namespace MongoDB.Bson.SourceGeneration.Tests
             var b = new WithGuidPerListingOverride { Value = SampleGuid };
             var c = new WithGuidPerPocoOverride { Value = SampleGuid };
             var d = new WithGuidExplicit { Value = SampleGuid };
+            var e = new WithGuidPerMemberAttribute { Value = SampleGuid };
 
             BsonSerializer.Deserialize<WithGuid>(a.ToBson()).Value.Should().Be(SampleGuid);
             BsonSerializer.Deserialize<WithGuidPerListingOverride>(b.ToBson()).Value.Should().Be(SampleGuid);
             BsonSerializer.Deserialize<WithGuidPerPocoOverride>(c.ToBson()).Value.Should().Be(SampleGuid);
             BsonSerializer.Deserialize<WithGuidExplicit>(d.ToBson()).Value.Should().Be(SampleGuid);
+            BsonSerializer.Deserialize<WithGuidPerMemberAttribute>(e.ToBson()).Value.Should().Be(SampleGuid);
+        }
+
+        [Fact]
+        public void Per_Member_BsonGuidRepresentation_Wins_Over_Context_Default()
+        {
+            // The context default is Standard (set on GuidTestContext). The per-member
+            // [BsonGuidRepresentation(PythonLegacy)] on WithGuidPerMemberAttribute.Value must
+            // override it. Pre-fix, the attribute was silently dropped and the Guid would have
+            // gone out with the Standard byte order.
+            AssertGuidEncodedAs(new WithGuidPerMemberAttribute { Value = SampleGuid }, GuidRepresentation.PythonLegacy);
         }
 
         // Encodes the POCO via source-gen, extracts the BSON binary value of the Value field, and

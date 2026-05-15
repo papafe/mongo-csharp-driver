@@ -51,5 +51,12 @@ namespace MongoDB.Bson.Serialization.Attributes
         /// "inherit from the context."
         /// </summary>
         public GuidRepresentation DefaultGuidRepresentation { get; set; } = GuidRepresentation.Unspecified;
+
+        /// <summary>
+        /// Overrides the context-wide <see cref="BsonSourceGenerationOptionsAttribute.PropertyNamingPolicy"/>
+        /// for this specific type. <see cref="BsonNamingPolicy.Unspecified"/> (the default) means
+        /// "inherit from the context."
+        /// </summary>
+        public BsonNamingPolicy PropertyNamingPolicy { get; set; } = BsonNamingPolicy.Unspecified;
     }
 }

@@ -181,13 +181,26 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             sb.AppendLine();
         }
 
-        // Members with [BsonSerializer(typeof(X))] or [BsonRepresentation(BsonType.X)] route their
-        // reads/writes through a cached serializer instance instead of the inline primitive path.
-        // Fields are scoped to the per-type serializer class — member names are unique within a
-        // POCO, so the per-member name suffices.
+        // Two kinds of cached serializer fields scope to each per-type serializer class:
+        //
+        //   1. Per-member override fields — one per member with [BsonSerializer(typeof(X))],
+        //      [BsonRepresentation(BsonType.Y)], or a Guid-representation context override. The
+        //      field name carries the member name (`s_customerNameSerializer`).
+        //
+        //   2. Per-primitive-kind shared fields — one per primitive kind the type's plain primitive
+        //      members read or write (e.g. `s_int32Serializer = new Int32Serializer()`). All plain
+        //      `int` members route through the same instance; no per-member field is generated.
+        //      Bringing the cached primitive-serializer pattern to the default emit closes a
+        //      behavioural divergence with the reflection path: Int32Serializer.Deserialize coerces
+        //      Double / Int64 / Decimal128 / String to Int32, and the source-gen path would
+        //      previously throw on any of those non-Int32 wire types because the emit was a literal
+        //      `reader.ReadInt32()`. Routing through the cached serializer inherits the reflection
+        //      path's coercion semantics for free.
         private static void EmitMemberSerializerFields(StringBuilder sb, TypeToGenerate type, string indent)
         {
             var anyEmitted = false;
+
+            // Per-member override fields (per-member name).
             foreach (var m in type.Members)
             {
                 var ov = GetMemberSerializerOverride(m);
@@ -197,8 +210,58 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                   .Append(ov.Value.InitExpression).AppendLine(";");
                 anyEmitted = true;
             }
+
+            // Per-primitive-kind shared fields. Walk members once, collecting distinct kinds that
+            // route through the shared field (no per-member override, primitive kind handled inline).
+            var emittedKinds = new HashSet<PrimitiveKind>();
+            foreach (var m in type.Members)
+            {
+                if (GetMemberSerializerOverride(m) is not null) { continue; }
+                if (!UsesSharedPrimitiveField(m.PrimitiveKind)) { continue; }
+                if (!emittedKinds.Add(m.PrimitiveKind)) { continue; }
+                var serializerType = PrimitiveSerializerType(m.PrimitiveKind)!;
+                sb.Append(indent).Append("    private static readonly ").Append(serializerType)
+                  .Append(' ').Append(PrimitiveKindFieldName(m.PrimitiveKind)).Append(" = new ")
+                  .Append(serializerType).AppendLine("();");
+                anyEmitted = true;
+            }
+
             if (anyEmitted) { sb.AppendLine(); }
         }
+
+        // Primitive kinds the generator routes through a cached static serializer instance (per
+        // generated serializer class). Routing through the runtime serializer keeps source-gen
+        // AOT-clean (concrete type referenced by name, no reflection, no registry trip) while
+        // picking up the reflection path's coercion behaviour for free. Kinds not listed here
+        // either fall back to `LookupSerializer<T>()` (DateTime, Guid, BinaryData — see PLAN.md
+        // support matrix) or take a separately-emitted code path.
+        private static bool UsesSharedPrimitiveField(PrimitiveKind kind) => kind switch
+        {
+            PrimitiveKind.Boolean => true,
+            PrimitiveKind.Int32 => true,
+            PrimitiveKind.Int64 => true,
+            PrimitiveKind.Double => true,
+            PrimitiveKind.Single => true,
+            PrimitiveKind.Decimal => true,
+            PrimitiveKind.String => true,
+            PrimitiveKind.ObjectId => true,
+            PrimitiveKind.Decimal128 => true,
+            _ => false
+        };
+
+        private static string PrimitiveKindFieldName(PrimitiveKind kind) => kind switch
+        {
+            PrimitiveKind.Boolean => "s_booleanSerializer",
+            PrimitiveKind.Int32 => "s_int32Serializer",
+            PrimitiveKind.Int64 => "s_int64Serializer",
+            PrimitiveKind.Double => "s_doubleSerializer",
+            PrimitiveKind.Single => "s_singleSerializer",
+            PrimitiveKind.Decimal => "s_decimalSerializer",
+            PrimitiveKind.String => "s_stringSerializer",
+            PrimitiveKind.ObjectId => "s_objectIdSerializer",
+            PrimitiveKind.Decimal128 => "s_decimal128Serializer",
+            _ => throw new System.ArgumentOutOfRangeException(nameof(kind))
+        };
 
         private static void EmitDeserialize(
             StringBuilder sb,
@@ -728,7 +791,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
         // Read precedence:
         //   1. [BsonSerializer] / [BsonRepresentation] override → cached per-member serializer field.
-        //   2. Inline primitive read (`reader.ReadInt32()` etc.).
+        //   2. Inline-primitive kind → shared per-primitive-kind cached field (e.g. `s_int32Serializer.Deserialize(...)`).
+        //      Stays AOT-clean (concrete type, no registry) and inherits the reflection-path
+        //      coercion of Int32 from Double / Int64 / Decimal128 / String etc.
         //   3. Same-context type → cached static field on the partial context (avoids the registry
         //      lookup + cast that the fallback would emit). Lookup is by *full name*, so two types
         //      sharing a short name across namespaces (`Geo.Marker` / `Site.Marker`) each route to
@@ -742,15 +807,10 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 return;
             }
 
-            switch (member.PrimitiveKind)
+            if (UsesSharedPrimitiveField(member.PrimitiveKind))
             {
-                case PrimitiveKind.Boolean: sb.Append("reader.ReadBoolean()"); return;
-                case PrimitiveKind.Int32: sb.Append("reader.ReadInt32()"); return;
-                case PrimitiveKind.Int64: sb.Append("reader.ReadInt64()"); return;
-                case PrimitiveKind.Double: sb.Append("reader.ReadDouble()"); return;
-                case PrimitiveKind.String: sb.Append("reader.ReadString()"); return;
-                case PrimitiveKind.ObjectId: sb.Append("reader.ReadObjectId()"); return;
-                case PrimitiveKind.Decimal128: sb.Append("reader.ReadDecimal128()"); return;
+                sb.Append(PrimitiveKindFieldName(member.PrimitiveKind)).Append(".Deserialize(context, args)");
+                return;
             }
 
             if (typesByFullName.TryGetValue(member.TypeFullName, out var inContextType))
@@ -764,8 +824,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
               .Append(member.TypeFullName).Append(")).Deserialize(context, args)");
         }
 
-        // Mirrors EmitReadExpression's precedence: per-member override, inline primitive, same-context
-        // direct call, registry fallback.
+        // Mirrors EmitReadExpression's precedence: per-member override, shared primitive serializer,
+        // same-context direct call, registry fallback.
         private static void EmitWriteStatement(StringBuilder sb, MemberToGenerate member, Dictionary<string, TypeToGenerate> typesByFullName)
         {
             if (GetMemberSerializerOverride(member) is not null)
@@ -775,15 +835,11 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 return;
             }
 
-            switch (member.PrimitiveKind)
+            if (UsesSharedPrimitiveField(member.PrimitiveKind))
             {
-                case PrimitiveKind.Boolean: sb.Append("writer.WriteBoolean(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.Int32: sb.Append("writer.WriteInt32(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.Int64: sb.Append("writer.WriteInt64(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.Double: sb.Append("writer.WriteDouble(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.String: sb.Append("writer.WriteString(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.ObjectId: sb.Append("writer.WriteObjectId(value.").Append(member.Name).Append(");"); return;
-                case PrimitiveKind.Decimal128: sb.Append("writer.WriteDecimal128(value.").Append(member.Name).Append(");"); return;
+                sb.Append(PrimitiveKindFieldName(member.PrimitiveKind)).Append(".Serialize(context, args, value.")
+                  .Append(member.Name).Append(");");
+                return;
             }
 
             if (typesByFullName.TryGetValue(member.TypeFullName, out var inContextType))
@@ -849,6 +905,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             PrimitiveKind.Int32 => "global::MongoDB.Bson.Serialization.Serializers.Int32Serializer",
             PrimitiveKind.Int64 => "global::MongoDB.Bson.Serialization.Serializers.Int64Serializer",
             PrimitiveKind.Double => "global::MongoDB.Bson.Serialization.Serializers.DoubleSerializer",
+            PrimitiveKind.Single => "global::MongoDB.Bson.Serialization.Serializers.SingleSerializer",
+            PrimitiveKind.Decimal => "global::MongoDB.Bson.Serialization.Serializers.DecimalSerializer",
             PrimitiveKind.String => "global::MongoDB.Bson.Serialization.Serializers.StringSerializer",
             PrimitiveKind.ObjectId => "global::MongoDB.Bson.Serialization.Serializers.ObjectIdSerializer",
             PrimitiveKind.DateTime => "global::MongoDB.Bson.Serialization.Serializers.DateTimeSerializer",

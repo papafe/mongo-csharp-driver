@@ -65,11 +65,16 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg) { continue; }
 
                 // Per-[BsonSerializable] named-arg override layers on top of context options.
+                // A null read at this layer means "no opinion" → keep the inherited value.
                 var perListingGuid = AttributeReaders.GetEnumNamedArgument(
                     attribute, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
-                var effective = perListingGuid is not null
-                    ? new EffectiveOptions(DefaultGuidRepresentation: perListingGuid)
-                    : contextOptions;
+                var perListingNaming = AttributeReaders.GetEnumNamedArgument(
+                    attribute, "PropertyNamingPolicy", "BsonNamingPolicy", unsetValue: 0);
+                var effective = contextOptions with
+                {
+                    DefaultGuidRepresentation = perListingGuid ?? contextOptions.DefaultGuidRepresentation,
+                    PropertyNamingPolicy = perListingNaming ?? contextOptions.PropertyNamingPolicy,
+                };
 
                 var typeInfo = ExtractType(typeArg, attrs, effective, cancellationToken);
                 if (typeInfo is not null)
@@ -127,22 +132,47 @@ namespace MongoDB.Bson.SourceGeneration.Generator
 
         // The compile-time-bakeable options that flow from context → per-[BsonSerializable] →
         // per-POCO override. Null fields mean "no opinion at this layer" — the next layer's value
-        // (or the inline / LookupSerializer default) wins.
-        private readonly record struct EffectiveOptions(string? DefaultGuidRepresentation = null);
+        // (or the inline / LookupSerializer default) wins. IgnoreExtraElements and IncludeFields
+        // are plain bools sourced from the context-wide options only; they're not in the layered
+        // fold today (per-type [BsonIgnoreExtraElements] / [BsonIgnore] are the per-type levers).
+        // Default constructor must yield the "no context options present" state: include fields
+        // (matches reflection) and don't ignore extras.
+        private readonly record struct EffectiveOptions(
+            string? DefaultGuidRepresentation,
+            string? PropertyNamingPolicy,
+            bool IgnoreExtraElements,
+            bool IncludeFields)
+        {
+            // "No [BsonSourceGenerationOptions] attribute" baseline. Using `default(EffectiveOptions)`
+            // would silently force IncludeFields to false because positional-record defaults are
+            // ignored by `default`.
+            public static EffectiveOptions Empty => new EffectiveOptions(
+                DefaultGuidRepresentation: null,
+                PropertyNamingPolicy: null,
+                IgnoreExtraElements: false,
+                IncludeFields: true);
+        }
 
         // Reads the context-wide [BsonSourceGenerationOptions] attribute on the context class once.
         // Returns Empty when the attribute isn't present or all properties are at their sentinel
         // values.
         private static EffectiveOptions ResolveContextOptions(INamedTypeSymbol contextSymbol, AttributeSymbols attrs)
         {
-            if (attrs.SourceGenerationOptions is null) { return default; }
+            if (attrs.SourceGenerationOptions is null) { return EffectiveOptions.Empty; }
             foreach (var a in contextSymbol.GetAttributes())
             {
                 if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attrs.SourceGenerationOptions)) { continue; }
                 var guid = AttributeReaders.GetEnumNamedArgument(a, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
-                return new EffectiveOptions(DefaultGuidRepresentation: guid);
+                var naming = AttributeReaders.GetEnumNamedArgument(a, "PropertyNamingPolicy", "BsonNamingPolicy", unsetValue: 0);
+                var ignoreExtra = AttributeReaders.GetBoolNamedArgument(a, "IgnoreExtraElements") ?? false;
+                var includeFields = AttributeReaders.GetBoolNamedArgument(a, "IncludeFields") ?? true;
+                return new EffectiveOptions(
+                    DefaultGuidRepresentation: guid,
+                    PropertyNamingPolicy: naming,
+                    IgnoreExtraElements: ignoreExtra,
+                    IncludeFields: includeFields);
             }
-            return default;
+            return EffectiveOptions.Empty;
         }
 
         // [BsonSerializationOverride] on the POCO is the third layer of override. Returns the
@@ -157,7 +187,12 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             {
                 if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attrs.SerializationOverride)) { continue; }
                 var guid = AttributeReaders.GetEnumNamedArgument(a, "DefaultGuidRepresentation", "GuidRepresentation", unsetValue: 0);
-                return inherited with { DefaultGuidRepresentation = guid ?? inherited.DefaultGuidRepresentation };
+                var naming = AttributeReaders.GetEnumNamedArgument(a, "PropertyNamingPolicy", "BsonNamingPolicy", unsetValue: 0);
+                return inherited with
+                {
+                    DefaultGuidRepresentation = guid ?? inherited.DefaultGuidRepresentation,
+                    PropertyNamingPolicy = naming ?? inherited.PropertyNamingPolicy,
+                };
             }
             return inherited;
         }
@@ -168,13 +203,19 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             EffectiveOptions inheritedOptions,
             CancellationToken cancellationToken)
         {
-            var ignoreExtraElements = HasAttribute(type, attrs.IgnoreExtraElements);
             var noId = HasAttribute(type, attrs.NoId);
 
             // Layered fold: context default → per-[BsonSerializable] override → per-POCO
             // [BsonSerializationOverride]. Per-member attributes ([BsonRepresentation],
             // [BsonSerializer]) still win and are handled inside BuildMember.
             var effectiveOptions = FoldPocoOverride(type, attrs, inheritedOptions);
+
+            // [BsonIgnoreExtraElements] on the type is the per-type lever:
+            //   - Present with no arg / true  → ignore extras (overrides context).
+            //   - Present with false          → strict mode (overrides context).
+            //   - Absent                      → fall back to the context-default option.
+            // The reflection path's BsonIgnoreExtraElementsAttribute behaves the same way.
+            var ignoreExtraElements = ResolveIgnoreExtraElements(type, attrs, effectiveOptions.IgnoreExtraElements);
 
             // Walk derived → base, collecting one (fields, properties) pair per level. Names already
             // contributed by a more-derived level win (matches `new`/override semantics; first-seen
@@ -198,6 +239,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                     if (member.IsStatic) { continue; }
                     if (member.DeclaredAccessibility != Accessibility.Public) { continue; }
                     if (!TryClassifyMember(member, out var memberType, out var isField, out var isInitOnly, out var isRequired)) { continue; }
+                    if (isField && !effectiveOptions.IncludeFields) { continue; }
                     if (HasAttribute(member, attrs.Ignore)) { continue; }
                     if (!seenNames.Add(member.Name)) { continue; } // derived override already added
 
@@ -304,21 +346,28 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             var representation = GetRepresentationEnumName(member, attrs.Representation);
             var customSerializer = GetAttributeTypeArgument(member, attrs.Serializer);
 
-            // DefaultGuidRepresentation only applies to Guid members and only when no per-member
-            // attribute already wins. The per-member [BsonRepresentation] / [BsonSerializer] are
-            // explicit user intent at the member level and should not be overridden by a context
-            // default.
+            // Guid representation precedence (highest first):
+            //   1. [BsonSerializer(typeof(X))] — fully replaces the emit; the Guid rep is whatever
+            //      the user's serializer does. Falls through this block.
+            //   2. [BsonRepresentation(BsonType.X)] — re-encodes the Guid as a different BSON wire
+            //      type (e.g. String). Also short-circuits the Guid-rep override; the wire shape
+            //      isn't binary so byte order is irrelevant.
+            //   3. [BsonGuidRepresentation(GuidRepresentation.X)] — per-member explicit binary
+            //      byte ordering. Beats the context default.
+            //   4. Context-folded DefaultGuidRepresentation — the layered context → per-listing →
+            //      per-POCO fold lives in `options`.
             string? guidRepresentationOverride = null;
             if (primitiveKind == PrimitiveKind.Guid &&
                 representation is null &&
                 customSerializer is null)
             {
-                guidRepresentationOverride = options.DefaultGuidRepresentation;
+                var perMember = GetGuidRepresentationName(member, attrs.GuidRepresentation);
+                guidRepresentationOverride = perMember ?? options.DefaultGuidRepresentation;
             }
 
             return new MemberToGenerate(
                 Name: member.Name,
-                ElementName: ResolveElementName(member, member.Name, declaringTypeName, attrs, typeHasNoId),
+                ElementName: ResolveElementName(member, member.Name, declaringTypeName, attrs, typeHasNoId, options.PropertyNamingPolicy),
                 TypeFullName: memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 PrimitiveKind: primitiveKind,
                 AllowsNull: AllowsNull(memberType),
@@ -511,14 +560,38 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return (ExtraElementsKind.None, null);
         }
 
+        // Per-type [BsonIgnoreExtraElements] beats the context default. Reading order mirrors the
+        // reflection-path attribute: a presence-only `[BsonIgnoreExtraElements]` defaults to true;
+        // `[BsonIgnoreExtraElements(false)]` opts back to strict mode. Returns the context default
+        // when the attribute is absent.
+        private static bool ResolveIgnoreExtraElements(
+            INamedTypeSymbol type,
+            AttributeSymbols attrs,
+            bool contextDefault)
+        {
+            if (attrs.IgnoreExtraElements is null) { return contextDefault; }
+            foreach (var a in type.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(a.AttributeClass, attrs.IgnoreExtraElements)) { continue; }
+                if (a.ConstructorArguments.Length >= 1 && a.ConstructorArguments[0].Value is bool b)
+                {
+                    return b;
+                }
+                return true; // presence-only ctor: `[BsonIgnoreExtraElements]` ≡ true
+            }
+            return contextDefault;
+        }
+
         private static string ResolveElementName(
             ISymbol member,
             string memberName,
             string declaringTypeName,
             AttributeSymbols attrs,
-            bool typeHasNoId)
+            bool typeHasNoId,
+            string? propertyNamingPolicy)
         {
-            // [BsonElement("name")] wins.
+            // [BsonElement("name")] wins. The user's literal string is honored verbatim — naming
+            // policy does *not* re-transform an explicit element name.
             if (attrs.Element is not null)
             {
                 foreach (var a in member.GetAttributes())
@@ -540,14 +613,72 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             }
 
             // Default Id-detection convention: Id, id, <ClassName>Id — suppressed if [BsonNoId] on the type.
+            // Naming policy does not apply: _id is a wire-protocol identifier, not a renamed member.
             if (!typeHasNoId &&
                 (memberName == "Id" || memberName == "id" || memberName == declaringTypeName + "Id"))
             {
                 return "_id";
             }
 
-            // Otherwise: the member name verbatim. Naming policies (camelCase, etc.) come later.
-            return memberName;
+            // Fallback: the member name, optionally transformed by the effective PropertyNamingPolicy.
+            return ApplyNamingPolicy(memberName, propertyNamingPolicy);
+        }
+
+        // Applies a [BsonSourceGenerationOptions.PropertyNamingPolicy] to a member name at codegen.
+        // The string is the enum field name produced by GetEnumNamedArgument (e.g. "CamelCase"); a
+        // null or unrecognised policy returns the name unchanged.
+        //
+        // CamelCase matches the reflection-path CamelCaseElementNameConvention bit-for-bit: lower
+        // the first character, keep the rest. SnakeCase / KebabCase use a single word-boundary rule:
+        // insert a separator before any upper-case character that's preceded by a lower-case
+        // character, or before an upper-case character that's both preceded by an upper-case
+        // character *and* followed by a lower-case character (so "URLBuilder" → "url_builder").
+        private static string ApplyNamingPolicy(string memberName, string? policy)
+        {
+            if (string.IsNullOrEmpty(memberName) || policy is null)
+            {
+                return memberName;
+            }
+
+            switch (policy)
+            {
+                case "CamelCase":
+                    if (memberName.Length == 1)
+                    {
+                        return char.ToLowerInvariant(memberName[0]).ToString();
+                    }
+                    return char.ToLowerInvariant(memberName[0]) + memberName.Substring(1);
+
+                case "SnakeCase":
+                    return ToDelimited(memberName, '_');
+
+                case "KebabCase":
+                    return ToDelimited(memberName, '-');
+
+                default:
+                    return memberName;
+            }
+        }
+
+        private static string ToDelimited(string s, char separator)
+        {
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            for (var i = 0; i < s.Length; i++)
+            {
+                var c = s[i];
+                if (i > 0 && char.IsUpper(c))
+                {
+                    var prev = s[i - 1];
+                    var next = i + 1 < s.Length ? s[i + 1] : (char)0;
+                    var startsWord = char.IsLower(prev) || (char.IsUpper(prev) && next != 0 && char.IsLower(next));
+                    if (startsWord)
+                    {
+                        sb.Append(separator);
+                    }
+                }
+                sb.Append(char.ToLowerInvariant(c));
+            }
+            return sb.ToString();
         }
     }
 }

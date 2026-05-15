@@ -40,5 +40,12 @@ namespace MongoDB.Bson.Serialization.Attributes
         /// override; inherit whatever the layered fold produced before this attribute."
         /// </summary>
         public GuidRepresentation DefaultGuidRepresentation { get; set; } = GuidRepresentation.Unspecified;
+
+        /// <summary>
+        /// Overrides the context-wide <see cref="BsonSourceGenerationOptionsAttribute.PropertyNamingPolicy"/>
+        /// for this POCO. <see cref="BsonNamingPolicy.Unspecified"/> (the default) means "don't
+        /// override; inherit whatever the layered fold produced before this attribute."
+        /// </summary>
+        public BsonNamingPolicy PropertyNamingPolicy { get; set; } = BsonNamingPolicy.Unspecified;
     }
 }

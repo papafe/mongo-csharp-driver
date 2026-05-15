@@ -81,9 +81,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         Abstract
     }
 
-    // Primitives we read/write directly via BsonReader/BsonWriter without recursing
-    // through BsonSerializer.LookupSerializer. Anything not in this enum falls through
-    // to LookupSerializer<T>().Serialize/Deserialize at runtime.
+    // Primitives the generator routes through a cached static serializer instance (per generated
+    // serializer class) instead of `BsonSerializer.LookupSerializer<T>()`. Anything not in this
+    // enum falls through to LookupSerializer<T>().Serialize/Deserialize at runtime.
     internal enum PrimitiveKind
     {
         None,
@@ -94,7 +94,9 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         String,
         ObjectId,
         DateTime,
+        Decimal,
         Decimal128,
+        Single,
         Guid,
         BinaryData
     }

@@ -33,6 +33,8 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 SpecialType.System_Int32 => PrimitiveKind.Int32,
                 SpecialType.System_Int64 => PrimitiveKind.Int64,
                 SpecialType.System_Double => PrimitiveKind.Double,
+                SpecialType.System_Single => PrimitiveKind.Single,
+                SpecialType.System_Decimal => PrimitiveKind.Decimal,
                 SpecialType.System_String => PrimitiveKind.String,
                 SpecialType.System_DateTime => PrimitiveKind.DateTime,
                 _ => ClassifyByFullName(type)

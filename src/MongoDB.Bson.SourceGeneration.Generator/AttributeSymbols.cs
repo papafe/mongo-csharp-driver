@@ -36,6 +36,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         public readonly INamedTypeSymbol? DefaultValue;
         public readonly INamedTypeSymbol? ExtraElements;
         public readonly INamedTypeSymbol? Representation;
+        public readonly INamedTypeSymbol? GuidRepresentation;
         public readonly INamedTypeSymbol? Serializer;
         public readonly INamedTypeSymbol? IgnoreExtraElements;
         public readonly INamedTypeSymbol? NoId;
@@ -55,6 +56,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             INamedTypeSymbol? defaultValue,
             INamedTypeSymbol? extraElements,
             INamedTypeSymbol? representation,
+            INamedTypeSymbol? guidRepresentation,
             INamedTypeSymbol? serializer,
             INamedTypeSymbol? ignoreExtraElements,
             INamedTypeSymbol? noId,
@@ -73,6 +75,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             DefaultValue = defaultValue;
             ExtraElements = extraElements;
             Representation = representation;
+            GuidRepresentation = guidRepresentation;
             Serializer = serializer;
             IgnoreExtraElements = ignoreExtraElements;
             NoId = noId;
@@ -93,6 +96,7 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonDefaultValueAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonExtraElementsAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonRepresentationAttribute"),
+            compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonGuidRepresentationAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonSerializerAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonIgnoreExtraElementsAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonNoIdAttribute"),

@@ -74,6 +74,30 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             return null;
         }
 
+        // Reads `[BsonGuidRepresentation(GuidRepresentation.X)]` and returns the enum field name
+        // ("Standard", "JavaLegacy", etc.) for the emitter to splice into
+        // `new GuidSerializer(GuidRepresentation.<Name>)`. Returns null when the attribute is absent
+        // or the ctor arg is at the `Unspecified` sentinel (= 0).
+        public static string? GetGuidRepresentationName(ISymbol member, INamedTypeSymbol? attribute)
+        {
+            var a = FindAttribute(member, attribute);
+            if (a is null || a.ConstructorArguments.Length < 1) { return null; }
+            var arg = a.ConstructorArguments[0];
+            if (arg.Type is not INamedTypeSymbol { Name: "GuidRepresentation" } || arg.Value is not int enumValue)
+            {
+                return null;
+            }
+            if (enumValue == 0) { return null; } // GuidRepresentation.Unspecified — treat as "no opinion"
+            foreach (var field in arg.Type.GetMembers())
+            {
+                if (field is IFieldSymbol f && f.IsConst && f.ConstantValue is int v && v == enumValue)
+                {
+                    return f.Name;
+                }
+            }
+            return null;
+        }
+
         public static string? GetDefaultValueExpression(ISymbol member, INamedTypeSymbol? attribute)
         {
             var a = FindAttribute(member, attribute);
@@ -104,6 +128,18 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                         return f.Name;
                     }
                 }
+            }
+            return null;
+        }
+
+        // Reads a named argument typed as `bool`. Returns null when the named arg is absent —
+        // callers decide whether absent means "false" or "inherit from a higher layer."
+        public static bool? GetBoolNamedArgument(AttributeData a, string argName)
+        {
+            foreach (var named in a.NamedArguments)
+            {
+                if (named.Key != argName) { continue; }
+                if (named.Value.Value is bool b) { return b; }
             }
             return null;
         }

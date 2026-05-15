@@ -31,6 +31,7 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(WithGuidPerListingOverride), DefaultGuidRepresentation = GuidRepresentation.JavaLegacy)]
     [BsonSerializable(typeof(WithGuidPerPocoOverride))]
     [BsonSerializable(typeof(WithGuidExplicit))]
+    [BsonSerializable(typeof(WithGuidPerMemberAttribute))]
     public partial class GuidTestContext : BsonSerializerContext
     {
     }

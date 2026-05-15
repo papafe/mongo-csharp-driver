@@ -44,4 +44,13 @@ namespace MongoDB.Bson.SourceGeneration.Tests
         [BsonRepresentation(BsonType.String)]
         public Guid Value { get; set; }
     }
+
+    // [BsonGuidRepresentation(GuidRepresentation.X)] is the per-member binary-byte-order lever.
+    // It must beat the context-default DefaultGuidRepresentation. The context defaults to
+    // Standard (in GuidTestContext); this POCO opts a single Guid member into PythonLegacy.
+    public class WithGuidPerMemberAttribute
+    {
+        [BsonGuidRepresentation(GuidRepresentation.PythonLegacy)]
+        public Guid Value { get; set; }
+    }
 }
