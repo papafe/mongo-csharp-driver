@@ -48,6 +48,14 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 return PrimitiveKind.BinaryData;
             }
 
+            // Any user-defined enum routes through a generic `EnumSerializer<TheEnum>`. The
+            // emitter handles the generic argument since it needs the member's CLR type, but
+            // classification happens here.
+            if (type.TypeKind == TypeKind.Enum)
+            {
+                return PrimitiveKind.Enum;
+            }
+
             var name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return name switch
             {

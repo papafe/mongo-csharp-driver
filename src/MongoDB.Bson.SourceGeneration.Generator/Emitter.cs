@@ -887,13 +887,18 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         //
         // Precedence (highest first):
         //   1. [BsonSerializer(typeof(X))] — user named a concrete serializer.
-        //   2. [BsonRepresentation(BsonType.Y)] — primitive re-encoded as a different BSON type.
-        //   3. Context-level DefaultGuidRepresentation, applied only to Guid members that don't
+        //   2. Enum members — every enum member gets a cached `EnumSerializer<TheEnum>` instance,
+        //      optionally constructed with the [BsonRepresentation(BsonType.Y)] argument. The
+        //      enum branch lives here (not in the generic [BsonRepresentation] branch below)
+        //      because the cached field type is a generic instantiation closed on the member's
+        //      CLR enum type, which the per-PrimitiveKind switch table can't express.
+        //   3. [BsonRepresentation(BsonType.Y)] — non-enum primitive re-encoded as a different BSON type.
+        //   4. Context-level DefaultGuidRepresentation, applied only to Guid members that don't
         //      already have one of the above.
         //
         // [BsonRepresentation] is only honored on members whose CLR type maps to a known
-        // PrimitiveKind. Putting it on non-primitive members has no effect today; a diagnostic
-        // will surface this in ticket #6.
+        // PrimitiveKind (including the Enum kind). Putting it on non-primitive members has no
+        // effect today; a diagnostic will surface this in ticket #6.
         private static MemberOverride? GetMemberSerializerOverride(MemberToGenerate m)
         {
             if (m.CustomSerializerTypeFullName is not null)
@@ -901,6 +906,15 @@ namespace MongoDB.Bson.SourceGeneration.Generator
                 return new MemberOverride(
                     FieldType: m.CustomSerializerTypeFullName,
                     InitExpression: "new " + m.CustomSerializerTypeFullName + "()");
+            }
+
+            if (m.PrimitiveKind == PrimitiveKind.Enum)
+            {
+                var enumSerializer = "global::MongoDB.Bson.Serialization.Serializers.EnumSerializer<" + m.TypeFullName + ">";
+                var init = m.RepresentationBsonType is not null
+                    ? "new " + enumSerializer + "(global::MongoDB.Bson.BsonType." + m.RepresentationBsonType + ")"
+                    : "new " + enumSerializer + "()";
+                return new MemberOverride(FieldType: enumSerializer, InitExpression: init);
             }
 
             if (m.RepresentationBsonType is not null)

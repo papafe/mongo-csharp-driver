@@ -58,6 +58,8 @@ namespace MongoDB.Bson.SourceGeneration.Tests
     [BsonSerializable(typeof(IThing))]
     [BsonSerializable(typeof(MoneyEntry))]
     [BsonSerializable(typeof(MoneyEntryAsString))]
+    [BsonSerializable(typeof(UserAccount))]
+    [BsonSerializable(typeof(UserAccountAsString))]
     public partial class TestContext : BsonSerializerContext
     {
     }

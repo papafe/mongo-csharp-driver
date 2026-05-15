@@ -98,7 +98,12 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         Decimal128,
         Single,
         Guid,
-        BinaryData
+        BinaryData,
+        // Any user-defined `enum` type. Emitter caches a per-member
+        // `EnumSerializer<TheEnum>` instance — the generic argument is the member's CLR type, so
+        // unlike the other primitive kinds the cached field can't be shared across members with
+        // different enum types.
+        Enum
     }
 
     // Shape of a [BsonExtraElements] catch-all member. The two supported shapes mirror
