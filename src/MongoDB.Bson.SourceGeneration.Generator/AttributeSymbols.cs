@@ -42,7 +42,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
         public readonly INamedTypeSymbol? NoId;
         public readonly INamedTypeSymbol? Discriminator;
         public readonly INamedTypeSymbol? KnownTypes;
-        public readonly INamedTypeSymbol? Serializable;
         public readonly INamedTypeSymbol? SourceGenerationOptions;
         public readonly INamedTypeSymbol? SerializationOverride;
 
@@ -62,7 +61,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             INamedTypeSymbol? noId,
             INamedTypeSymbol? discriminator,
             INamedTypeSymbol? knownTypes,
-            INamedTypeSymbol? serializable,
             INamedTypeSymbol? sourceGenerationOptions,
             INamedTypeSymbol? serializationOverride)
         {
@@ -81,7 +79,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             NoId = noId;
             Discriminator = discriminator;
             KnownTypes = knownTypes;
-            Serializable = serializable;
             SourceGenerationOptions = sourceGenerationOptions;
             SerializationOverride = serializationOverride;
         }
@@ -102,7 +99,6 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonNoIdAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonDiscriminatorAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonKnownTypesAttribute"),
-            compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonSerializableAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonSourceGenerationOptionsAttribute"),
             compilation.GetTypeByMetadataName(BsonAttributesNs + "BsonSerializationOverrideAttribute"));
     }
