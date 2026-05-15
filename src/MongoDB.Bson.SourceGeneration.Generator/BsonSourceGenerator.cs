@@ -42,15 +42,34 @@ namespace MongoDB.Bson.SourceGeneration.Generator
             context.RegisterSourceOutput(contexts, Emit);
         }
 
+        // Emits one file for the context (partial class + GeneratedProvider preamble) and one
+        // file per type's nested `<T>Serializer` class. Split is purely for readability when
+        // inspecting generated output; the partial-class assembly produces the same shape the
+        // single-file emit did. See PLAN.md "Generated-file layout" for the rationale and a note
+        // about reverting to a single file.
         private static void Emit(SourceProductionContext spc, ContextInfo context)
         {
-            var source = Emitter.Emit(context);
+            spc.AddSource(BuildHintName(context, suffix: null), Emitter.EmitContextFile(context));
 
-            var hintName = string.IsNullOrEmpty(context.ContextNamespace)
-                ? $"{context.ContextName}.g.cs"
-                : $"{context.ContextNamespace}.{context.ContextName}.g.cs";
+            foreach (var type in context.Types)
+            {
+                spc.AddSource(
+                    BuildHintName(context, suffix: type.TypeShortName + "Serializer"),
+                    Emitter.EmitSerializerFile(context, type));
+            }
+        }
 
-            spc.AddSource(hintName, source);
+        // Roslyn requires hint names to be unique per generator. We key on namespace + context name
+        // + (for per-type files) the disambiguated TypeShortName, so collisions across contexts or
+        // across same-short-name types in different namespaces don't happen.
+        private static string BuildHintName(ContextInfo context, string? suffix)
+        {
+            var prefix = string.IsNullOrEmpty(context.ContextNamespace)
+                ? context.ContextName
+                : context.ContextNamespace + "." + context.ContextName;
+            return suffix is null
+                ? prefix + ".g.cs"
+                : prefix + "." + suffix + ".g.cs";
         }
     }
 }
