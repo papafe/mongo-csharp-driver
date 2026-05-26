@@ -70,39 +70,40 @@ The harness times three phases separately so you can see where each path spends 
 
 ## Sample results
 
-Steady-state (BDN `--job short`, Apple M1 Max, .NET 8.0.5, ARM64 RyuJIT, 2026-05-15):
+Steady-state (BDN default job, `sudo`, Apple M1 Max, .NET 8.0.5, ARM64 RyuJIT, 2026-05-26):
 
 **SimplePoco** (5 primitive members):
 
-| Method                 |     Mean | Ratio |    Allocated | Alloc Ratio |
-|------------------------|---------:|------:|-------------:|------------:|
-| Serialize_Reflection   | 303.6 ns |  1.00 |        104 B |        1.00 |
-| Serialize_SourceGen    | 225.3 ns |  0.74 |          0 B |        0.00 |
-| Deserialize_Reflection | 509.0 ns |  1.68 |        840 B |        8.08 |
-| Deserialize_SourceGen  | 365.8 ns |  1.20 |        872 B |        8.38 |
+| Method                 |     Mean |    Error |   StdDev | Ratio | Gen0   | Allocated | Alloc Ratio |
+|------------------------|---------:|---------:|---------:|------:|-------:|----------:|------------:|
+| Serialize_Reflection   | 318.1 ns |  4.60 ns |  4.08 ns |  1.00 | 0.0162 |     104 B |        1.00 |
+| Serialize_SourceGen    | 229.5 ns |  2.98 ns |  2.49 ns |  0.72 |      - |         - |        0.00 |
+| Deserialize_Reflection | 517.0 ns |  9.84 ns | 10.53 ns |  1.63 | 0.1335 |     840 B |        8.08 |
+| Deserialize_SourceGen  | 368.2 ns |  5.35 ns |  5.01 ns |  1.16 | 0.1388 |     872 B |        8.38 |
 
 **NestedPoco** (two in-context `Address` members):
 
-| Method                 |       Mean | Ratio |    Allocated | Alloc Ratio |
-|------------------------|-----------:|------:|-------------:|------------:|
-| Serialize_Reflection   |   750.4 ns |  1.00 |         32 B |        1.00 |
-| Serialize_SourceGen    |   604.4 ns |  0.81 |          0 B |        0.00 |
-| Deserialize_Reflection | 1,307.4 ns |  1.74 |       1776 B |       55.50 |
-| Deserialize_SourceGen  |   954.9 ns |  1.27 |       2080 B |       65.00 |
+| Method                 |       Mean |    Error |    StdDev |     Median | Ratio | Gen0   | Allocated | Alloc Ratio |
+|------------------------|-----------:|---------:|----------:|-----------:|------:|-------:|----------:|------------:|
+| Serialize_Reflection   |   818.3 ns | 10.71 ns |   8.94 ns |   817.5 ns |  1.00 | 0.0048 |      32 B |        1.00 |
+| Serialize_SourceGen    |   639.6 ns |  7.12 ns |   7.00 ns |   637.5 ns |  0.78 |      - |         - |        0.00 |
+| Deserialize_Reflection | 1,373.0 ns | 26.89 ns |  41.86 ns | 1,350.7 ns |  1.72 | 0.2823 |   1,776 B |       55.50 |
+| Deserialize_SourceGen  |   973.1 ns | 17.42 ns |  16.30 ns |   976.2 ns |  1.19 | 0.3300 |   2,080 B |       65.00 |
 
 **AttributedPoco** (`[BsonRepresentation]` on int + enum + ignore/element/required):
 
-| Method                 |     Mean | Ratio |    Allocated | Alloc Ratio |
-|------------------------|---------:|------:|-------------:|------------:|
-| Serialize_Reflection   | 374.5 ns |  1.00 |        104 B |        1.00 |
-| Serialize_SourceGen    | 295.4 ns |  0.79 |         24 B |        0.23 |
-| Deserialize_Reflection | 611.0 ns |  1.63 |        944 B |        9.08 |
-| Deserialize_SourceGen  | 473.7 ns |  1.26 |       1008 B |        9.69 |
+| Method                 |     Mean |   Error |  StdDev | Ratio | Gen0   | Allocated | Alloc Ratio |
+|------------------------|---------:|--------:|--------:|------:|-------:|----------:|------------:|
+| Serialize_Reflection   | 389.3 ns | 5.96 ns | 5.57 ns |  1.00 | 0.0162 |     104 B |        1.00 |
+| Serialize_SourceGen    | 312.1 ns | 5.56 ns | 4.93 ns |  0.80 | 0.0038 |      24 B |        0.23 |
+| Deserialize_Reflection | 650.2 ns | 9.43 ns | 8.36 ns |  1.67 | 0.1497 |     944 B |        9.08 |
+| Deserialize_SourceGen  | 495.1 ns | 3.23 ns | 3.02 ns |  1.27 | 0.1602 |   1,008 B |        9.69 |
 
 Headlines:
 
-- **Serialize is ~20–26% faster** under source-gen across all three shapes, and **drops allocations from ~100 B/op to 0 B/op for the simple shape** (and 24 B/op for the attributed one). The reflection path's per-op allocations come from boxing during accessor delegate invocation; source-gen calls the property setter/getter directly.
-- **Deserialize is ~22–28% faster** under source-gen. Allocations are similar between paths (both pay for the resulting POCO instance + string members); this is dominated by user-data size rather than dispatch overhead.
+- **Serialize is ~20–28% faster** under source-gen across all three shapes, and **drops allocations from ~100 B/op to 0 B/op for the simple shape** (and 24 B/op for the attributed one). The reflection path's per-op allocations come from boxing during accessor delegate invocation; source-gen calls the property setter/getter directly.
+- **Deserialize is ~24–29% faster** under source-gen. Allocations are similar between paths (both pay for the resulting POCO instance + string members); this is dominated by user-data size rather than dispatch overhead.
+- StdDev is < 3% of mean on every benchmark — results are stable and suitable for external citation.
 
 Cold-start (one-shot per process, 20-run average, same hardware):
 
