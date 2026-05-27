@@ -43,6 +43,7 @@ namespace MongoDB.Driver.Core.Misc
         private static readonly Feature __changeStreamPrePostImages = new Feature("ChangeStreamPrePostImages", WireVersion.Server60);
         private static readonly Feature __changeStreamSplitEventStage = new Feature("ChangeStreamSplitEventStage", WireVersion.Server70);
         private static readonly Feature __clientBulkWrite = new Feature("ClientBulkWrite", WireVersion.Server80);
+        private static readonly Feature __concatArraysAndSetUnionAccumulators = new Feature("ConcatArraysAndSetUnionAccumulators", WireVersion.Server81);
         private static readonly Feature __clientSideEncryption = new Feature("ClientSideEncryption", WireVersion.Server42);
         private static readonly Feature __clusteredIndexes = new Feature("ClusteredIndexes", WireVersion.Server53);
         private static readonly Feature __convertOperatorAnyToString = new Feature("ConvertOperatorAnyToString", WireVersion.Server83);
@@ -207,6 +208,11 @@ namespace MongoDB.Driver.Core.Misc
         /// Gets the client bulk write feature.
         /// </summary>
         public static Feature ClientBulkWrite => __clientBulkWrite;
+
+        /// <summary>
+        /// Gets the $concatArrays and $setUnion accumulators feature.
+        /// </summary>
+        public static Feature ConcatArraysAndSetUnionAccumulators => __concatArraysAndSetUnionAccumulators;
 
         /// <summary>
         /// Gets the client side encryption feature.
