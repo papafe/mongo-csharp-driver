@@ -236,6 +236,19 @@ functions:
           - "AWS_SESSION_TOKEN"
         script: |
           ${PREPARE_SHELL}
+          ./evergreen/fetch-kondukto-token.sh
+    - command: ec2.assume_role
+      params:
+        role_arn: ${ecr-evergreen-role}
+    - command: shell.exec
+      params:
+        working_dir: "mongo-csharp-driver"
+        include_expansions_in_env:
+          - "AWS_ACCESS_KEY_ID"
+          - "AWS_SECRET_ACCESS_KEY"
+          - "AWS_SESSION_TOKEN"
+        script: |
+          ${PREPARE_SHELL}
           ./evergreen/download-augmented-sbom.sh
     - command: ec2.assume_role
       params:
@@ -659,17 +672,6 @@ functions:
           . ${DRIVERS_TOOLS}/.evergreen/secrets_handling/setup-secrets.sh drivers/atlas-qa
           evergreen/run-atlas-search-test.sh
 
-  run-atlas-search-index-helpers-test:
-    - command: shell.exec
-      type: test
-      params:
-        working_dir: mongo-csharp-driver
-        include_expansions_in_env:
-          - "FRAMEWORK"
-        script: |
-          ${PREPARE_SHELL}
-          MONGODB_URI="${MONGODB_URI}" evergreen/run-atlas-search-index-helpers-test.sh
-
   run-ocsp-test:
     - command: shell.exec
       type: test
@@ -848,17 +850,21 @@ functions:
           . ./evergreen/build-packages.sh
 
   sign-packages:
+    - command: ec2.assume_role
+      params:
+        role_arn: ${ecr-evergreen-role}
     - command: shell.exec
       params:
         shell: bash
         working_dir: mongo-csharp-driver
         env:
-          ARTIFACTORY_PASSWORD: ${ARTIFACTORY_PASSWORD}
-          ARTIFACTORY_USERNAME: ${ARTIFACTORY_USERNAME}
           PACKAGE_VERSION: "$PACKAGE_VERSION"
           GRS_USERNAME: ${GRS_USERNAME}
           GRS_PASSWORD: ${GRS_PASSWORD}
           AUTHENTICODE_KEY_NAME: ${AUTHENTICODE_KEY_NAME}
+          AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+          AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+          AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
         script: |
           ${PREPARE_SHELL}
           . ./evergreen/sign-packages.sh
@@ -1366,13 +1372,6 @@ tasks:
             FRAMEWORK: net6.0
         - func: run-atlas-search-test
 
-    - name: atlas-search-index-helpers-test
-      commands:
-        - func: configure-framework
-          vars:
-            FRAMEWORK: net6.0
-        - func: run-atlas-search-index-helpers-test
-
     - name: test-oidc-auth
       commands:
         - func: configure-framework
@@ -1757,13 +1756,13 @@ tasks:
               echo "Copying files ... begin"
               export AZUREKMS_PRIVATEKEYPATH=/tmp/testazurekms_privatekey
               source $DRIVERS_TOOLS/.evergreen/csfle/azurekms/secrets-export.sh
-              tar czf /tmp/mongo-csharp-driver.tgz .
+              evergreen/compile-sources.sh
+              tar czf /tmp/mongo-csharp-driver.tgz tests/*.Tests/bin/Release/net6.0/ evergreen/install-dotnet.sh evergreen/run-csfle-azure-tests.sh
               AZUREKMS_SRC=/tmp/mongo-csharp-driver.tgz AZUREKMS_DST="~/" $DRIVERS_TOOLS/.evergreen/csfle/azurekms/copy-file.sh
               echo "Copying files ... end"
               echo "Untarring file ... begin"
               AZUREKMS_CMD="tar xf mongo-csharp-driver.tgz" $DRIVERS_TOOLS/.evergreen/csfle/azurekms/run-command.sh
               echo "Untarring file ... end"
-
         - command: shell.exec
           type: test
           params:
@@ -1972,10 +1971,6 @@ axes:
         display_name: "4.4"
         variables:
            VERSION: "4.4"
-      - id: "4.2"
-        display_name: "4.2"
-        variables:
-           VERSION: "4.2"
 
   - id: os
     display_name: OS
@@ -1987,12 +1982,6 @@ axes:
           skip_ECS_auth_test: true
           skip_web_identity_auth_test: true
         run_on: windows-2022-latest-small
-      - id: "ubuntu-1804"
-        display_name: "Ubuntu 18.04"
-        variables:
-          OS: "ubuntu-1804"
-          EG_TOOLS_COMMIT: "9e9a306820c4a517736691e34d141e2ad56e4af6"  # Pin drivers-evergreen-tools for Ubuntu 18.04 as a temporary workaround to run MongoDB 4.2 variants
-        run_on: ubuntu1804-test
       - id: "ubuntu-2004"
         display_name: "Ubuntu 20.04"
         variables:
@@ -2099,6 +2088,7 @@ task_groups:
       - func: init-test-results
       - func: make-files-executable
       - func: assume-aws-test-secrets-role
+      - func: configure-framework
       - command: subprocess.exec
         params:
           binary: bash
@@ -2178,41 +2168,6 @@ task_groups:
             - ${DRIVERS_TOOLS}/.evergreen/csfle/gcpkms/delete-instance.sh
     tasks:
       - test-csfle-with-gcp-kms
-
-  - name: atlas-search-index-helpers-task-group
-    setup_group_can_fail_task: true
-    setup_group_timeout_secs: 1800 # 30 minutes
-    setup_group:
-      - func: fetch-source
-      - func: prepare-resources
-      - func: fix-absolute-paths
-      - func: init-test-results
-      - func: make-files-executable
-      - func: assume-aws-test-secrets-role
-      - command: subprocess.exec
-        params:
-          binary: bash
-          include_expansions_in_env:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          env:
-            CLUSTER_PREFIX: dbx-csharp-index
-            MONGODB_VERSION: "8.0"
-          args:
-            - ${DRIVERS_TOOLS}/.evergreen/atlas/setup-atlas-cluster.sh
-      - command: expansions.update
-        params:
-          file: atlas-expansion.yml
-    teardown_group:
-      - func: upload-test-results
-      - command: subprocess.exec
-        params:
-          binary: bash
-          args:
-            - ${DRIVERS_TOOLS}/.evergreen/atlas/teardown-atlas-cluster.sh
-    tasks:
-      - atlas-search-index-helpers-test
 
   - name: test-aws-lambda-task-group
     setup_group_can_fail_task: true
@@ -2535,14 +2490,6 @@ buildvariants:
         remove_tasks:
           - test-netstandard21 # Apple M1 (arm64) cannot load runtimes lower then .NET 6.
 
-- matrix_name: "secure-tests-linux-1804"
-  matrix_spec: { version: ["4.2"], topology: "*", auth: "auth", ssl: "ssl", os: "ubuntu-1804" }
-  display_name: "${version} ${topology} ${auth} ${ssl} ${os}"
-  tags: ["tests-variant"]
-  tasks:
-    - name: test-netstandard21
-    - name: test-net60
-
 - matrix_name: "secure-tests-linux-2004"
   matrix_spec: { version: ["4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: "*", auth: "auth", ssl: "ssl", os: "ubuntu-2004" }
   display_name: "${version} ${topology} ${auth} ${ssl} ${os}"
@@ -2575,14 +2522,6 @@ buildvariants:
         remove_tasks:
           - test-netstandard21 # Apple M1 (arm64) cannot load runtimes lower then .NET 6.
 
-- matrix_name: "unsecure-tests-linux-1804"
-  matrix_spec: { version: ["4.2"], topology: "*", auth: "noauth", ssl: "nossl", os: "ubuntu-1804" }
-  display_name: "${version} ${topology} ${auth} ${ssl} ${os}"
-  tags: ["tests-variant"]
-  tasks:
-    - name: test-netstandard21
-    - name: test-net60
-
 - matrix_name: "unsecure-tests-linux-2004"
   matrix_spec: { version: ["4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: "*", auth: "noauth", ssl: "nossl", os: "ubuntu-2004" }
   display_name: "${version} ${topology} ${auth} ${ssl} ${os}"
@@ -2614,14 +2553,6 @@ buildvariants:
       then:
         remove_tasks:
           - test-netstandard21 # Apple M1 (arm64) cannot load runtimes lower then .NET 6.
-
-- matrix_name: "tests-compression-linux-1804"
-  matrix_spec: { compressor: "*", auth: "noauth", ssl: "nossl", version: ["4.2"], topology: "standalone", os: "ubuntu-1804" }
-  display_name: "${version} ${compressor} ${topology} ${auth} ${ssl} ${os} "
-  tags: ["tests-variant"]
-  tasks:
-    - name: test-netstandard21
-    - name: test-net60
 
 - matrix_name: "tests-compression-linux-2004"
   matrix_spec: { compressor: "*", auth: "noauth", ssl: "nossl", version: ["4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: "standalone", os: "ubuntu-2004" }
@@ -2764,13 +2695,6 @@ buildvariants:
   tasks:
     - name: atlas-search-test
 
-- name: atlas-search-index-helpers-test
-  display_name: "Atlas Search Index Helpers Tests"
-  run_on:
-    - ubuntu2004-test
-  tasks:
-    - name: atlas-search-index-helpers-task-group
-
 # Socks5 Proxy tests
 - matrix_name: "socks5-proxy-tests-linux"
   matrix_spec: { os: "ubuntu-2004", ssl: ["nossl", "ssl"], version: ["latest"], topology: ["replicaset"] }
@@ -2796,22 +2720,13 @@ buildvariants:
 
 # CSFLE tests
 - matrix_name: "csfle-with-mocked-kms-tests-windows"
-  matrix_spec: { os: "windows-64", ssl: "nossl", version: ["4.2", "4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: ["replicaset"] }
+  matrix_spec: { os: "windows-64", ssl: "nossl", version: ["4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: ["replicaset"] }
   display_name: "CSFLE Mocked KMS ${version} ${os}"
   tasks:
     - name: test-csfle-with-mocked-kms-tls-net472
     - name: test-csfle-with-mocked-kms-tls-netstandard21
     - name: test-csfle-with-mocked-kms-tls-net60
     - name: test-csfle-with-mongocryptd-net472
-    - name: test-csfle-with-mongocryptd-netstandard21
-    - name: test-csfle-with-mongocryptd-net60
-
-- matrix_name: "csfle-with-mocked-kms-tests-linux-1804"
-  matrix_spec: { os: "ubuntu-1804", ssl: "nossl", version: ["4.2"], topology: ["replicaset"] }
-  display_name: "CSFLE Mocked KMS ${version} ${os}"
-  tasks:
-    - name: test-csfle-with-mocked-kms-tls-netstandard21
-    - name: test-csfle-with-mocked-kms-tls-net60
     - name: test-csfle-with-mongocryptd-netstandard21
     - name: test-csfle-with-mongocryptd-net60
 
@@ -2825,8 +2740,8 @@ buildvariants:
     - name: test-csfle-with-mongocryptd-net60
 
 - matrix_name: "csfle-with-mocked-kms-tests-macOS"
-  matrix_spec: { os: ["macos-14", "macos-14-arm64"], ssl: "nossl", version: ["4.2", "4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: ["replicaset"] }
-  exclude_spec: { os: "macos-14-arm64", ssl: "*", version: ["4.2", "4.4", "5.0"], topology: "*" }
+  matrix_spec: { os: ["macos-14", "macos-14-arm64"], ssl: "nossl", version: ["4.4", "5.0", "6.0", "7.0", "8.0", "rapid", "latest"], topology: ["replicaset"] }
+  exclude_spec: { os: "macos-14-arm64", ssl: "*", version: ["4.4", "5.0"], topology: "*" }
   display_name: "CSFLE Mocked KMS ${version} ${os}"
   tasks:
     - name: test-csfle-with-mocked-kms-tls-netstandard21
@@ -2841,23 +2756,21 @@ buildvariants:
           - test-csfle-with-mocked-kms-tls-netstandard21
           - test-csfle-with-mongocryptd-netstandard21
 
-- matrix_name: "csfle-with-azure-kms-tests-linux"
-  matrix_spec: { ssl: "nossl", os: "ubuntu-2004" }
-  display_name: "CSFLE with AZURE KMS ${os}"
+- name: "csfle-with-azure-kms-tests"
+  display_name: "CSFLE with AZURE KMS"
   batchtime: 20160 # 14 days
+  run_on:
+    - ubuntu2004-small
   tasks:
     - name: testazurekms-task-group
-    - name: test-csfle-with-mongocryptd-netstandard21
-    - name: test-csfle-with-mongocryptd-net60
 
-- matrix_name: "csfle-with-gcp-kms-tests-linux"
-  matrix_spec: { ssl: "nossl", os: "ubuntu-2004" }
-  display_name: "CSFLE with GCP KMS ${os}"
+- name: "csfle-with-gcp-kms-tests"
+  display_name: "CSFLE with GCP KMS"
   batchtime: 20160 # 14 days
+  run_on:
+    - ubuntu2004-small
   tasks:
     - name: testgcpkms-task-group
-    - name: test-csfle-with-mongocryptd-netstandard21
-    - name: test-csfle-with-mongocryptd-net60
 
 # Smoke tests
 - matrix_name: "smoke-tests"
@@ -2974,11 +2887,7 @@ buildvariants:
   batchtime: 720 # 12 hours
   matrix_spec:
     os: ["ubuntu-2004", "windows-64"]
-    version: ["4.2", "8.0", "latest"]
-  exclude_spec:
-    # We do not have MongoDB 4.2 binaries for Ubuntu 2004
-    - os: "ubuntu-2004"
-      version: "4.2"
+    version: ["4.4", "8.0", "latest"]
   display_name: "OData tests on ${os} with MongoDB ${version}"
   tasks:
     - name: test-odata

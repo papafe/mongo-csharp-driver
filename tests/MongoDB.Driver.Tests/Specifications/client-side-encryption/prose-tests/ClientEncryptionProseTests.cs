@@ -168,8 +168,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
         [ParameterAttributeData]
         public void BsonSizeLimitAndBatchSizeSplittingTest([Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             var eventCapturer = CreateEventCapturer(commandNameFilter: "insert");
             using (var client = ConfigureClient())
             using (var clientEncrypted = ConfigureClientEncrypted(kmsProviderFilter: "local", eventCapturer: eventCapturer))
@@ -333,7 +331,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
         public void BypassMongocryptdClientWhenSharedLibraryTest(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().EnvironmentVariable("CRYPT_SHARED_LIB_PATH", isDefined: true, allowEmpty: false);
             // socket.Close can hang on non windows OS. Might be related to this issue: https://github.com/dotnet/runtime/issues/47342
             RequirePlatform
@@ -401,7 +398,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
         public void BypassSpawningMongocryptdViaMongocryptdBypassSpawnTest(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().EnvironmentVariable("CRYPT_SHARED_LIB_PATH", isDefined: false);
 
             var extraOptions = new Dictionary<string, object>
@@ -461,11 +457,9 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
                 switch (bypassSpawning)
                 {
                     case BypassSpawningMongocryptd.BypassAutoEncryption:
-                        RequireServer.Check().Supports(Feature.ClientSideEncryption);
                         RequireEnvironment.Check().EnvironmentVariable("CRYPT_SHARED_LIB_PATH", isDefined: false);
                         return ConfigureClientEncrypted(kmsProviderFilter: kmsProvider, bypassAutoEncryption: true, extraOptions: extraOptions);
                     case BypassSpawningMongocryptd.BypassQueryAnalysis:
-                        RequireServer.Check().Supports(Feature.ClientSideEncryption);
                         RequireEnvironment.Check().EnvironmentVariable("CRYPT_SHARED_LIB_PATH", isDefined: false);
                         return ConfigureClientEncrypted(kmsProviderFilter: kmsProvider, bypassQueryAnalysis: true, extraOptions: extraOptions);
                     case BypassSpawningMongocryptd.SharedLibrary:
@@ -531,8 +525,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values(false, true)] bool useLocalSchema,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             // this needs only for kmip, but the test design doesn't allow skipping only required steps
             RequireEnvironment.Check().EnvironmentVariable("KMS_MOCK_SERVERS_ENABLED", isDefined: true);
 
@@ -696,7 +688,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values("local", "aws", "azure", "gcp", "kmip")] string kmsProvider,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().KmsProvider(kmsProvider);
 
             using (var client = ConfigureClient())
@@ -784,7 +775,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             string expectedExceptionInfoForValidEncryption,
             string expectedExceptionInfoForInvalidEncryption)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().KmsProvider(kmsType);
 
             using (var client = ConfigureClient())
@@ -931,8 +921,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             string[] clientKeyVaultEventsExpectation,
             bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             var clientKeyVaultEventCapturer = CreateEventCapturer();
             using (var client_keyvault = CreateMongoClient(maxPoolSize: 1, writeConcern: WriteConcern.WMajority, readConcern: ReadConcern.Majority, eventCapturer: clientKeyVaultEventCapturer))
             using (var client_test = ConfigureClient(clearCollections: true, writeConcern: WriteConcern.WMajority, readConcern: ReadConcern.Majority))
@@ -1128,8 +1116,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Range(1, 4)] int testCase,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             var decryptionEventsCollectionNamespace = CollectionNamespace.FromFullName("db.decryption_events");
             using (var setupClient = ConfigureClient(clearCollections: true, mainCollectionNamespace: decryptionEventsCollectionNamespace))
             using (var clientEncryption = ConfigureClientEncryption(setupClient, kmsProviderNames: "local"))
@@ -1374,8 +1360,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values(false, true)] bool withExternalKeyVault,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             IMongoClient externalKeyVaultClient = null;
             if (withExternalKeyVault)
             {
@@ -1426,7 +1410,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values("network", "http")] string failureType,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().EnvironmentVariable("KMS_MOCK_SERVERS_ENABLED", isDefined: true);
 
             const string endpoint = "127.0.0.1:9003";
@@ -1569,7 +1552,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values(CertificateType.TlsWithoutClientCert, CertificateType.TlsWithClientCert, CertificateType.Expired, CertificateType.InvalidHostName)] CertificateType certificateType,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
             RequireEnvironment.Check().EnvironmentVariable("KMS_MOCK_SERVERS_ENABLED", isDefined: true);
 
             bool? isCertificateExpired = null, isInvalidHost = null; // will be assigned inside TestRelatedClientEncryptionOptionsConfigurator
@@ -1903,9 +1885,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
         {
             // This test specifically verifies part of the CSFLE specification that
             // KMS providers that include a name do not support automatic credentials.
-
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             var kmsProvider = "aws:name1";
 
             var exception = Record.Exception(() =>
@@ -1926,8 +1905,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values(false, true)] bool expectedEnvironment,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             EnsureEnvironmentConfigured(out var masterKey);
 
             using (var client = ConfigureClient(clearCollections: true))
@@ -2658,7 +2635,9 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
 
             var exception = Record.Exception(() => RunTestCase(csfleNamespace, pipeline8, null));
             exception.Should().NotBeNull();
-            exception.Message.Should().Contain("not supported");
+            (exception.Message.Contains("not supported") ||
+             exception.Message.Contains("Cannot specify both encryptionInformation and csfleEncryptionSchemas"))
+                .Should().BeTrue("expected error indicating that mixing CSFLE and QE in $lookup is not permitted");
 
             void RunTestCase(CollectionNamespace collectionNamespace, string pipeline, string expectedResult)
             {
@@ -2714,6 +2693,46 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
                 var collection = GetCollection(mongoClient, collectionNamespace);
                 collection.Aggregate(CreatePipeline(pipeline)).Single();
             }
+
+            PipelineDefinition<BsonDocument, BsonDocument> CreatePipeline(string pipelineJson)
+            {
+                return Bson.Serialization.BsonSerializer.Deserialize<List<BsonDocument>>(pipelineJson);
+            }
+        }
+
+        // 25. Test $lookup (case 10)
+        [Fact]
+        public void TestLookupQeJoinsNonCsfleSchema()
+        {
+            RequireServer.Check().Supports(Feature.Csfle2QEv2LookupNonCsfleSchema)
+                .ClusterTypes(ClusterType.ReplicaSet, ClusterType.Sharded, ClusterType.LoadBalanced);
+
+            TestLookupSetup();
+
+            var keyVaultCollectionNamespace = new CollectionNamespace("db", "keyvault");
+            var qeNamespace = new CollectionNamespace("db", "qe");
+
+            // Case 10: db.qe joins db.non_csfle_schema
+            var pipeline10 = """
+                             [
+                                 {"$match" : {"qe" : "qe"}},
+                                 {
+                                     "$lookup" : {
+                                         "from" : "non_csfle_schema",
+                                         "as" : "matched",
+                                         "pipeline" : [ {"$match" : {"non_csfle_schema" : "non_csfle_schema"}}, {"$project" : {"_id" : 0, "__safeContent__" : 0}} ]
+                                     }
+                                 },
+                                 {"$project" : {"_id" : 0, "__safeContent__" : 0}}
+                             ]
+                             """;
+            var expectedResult10 = """{"qe" : "qe", "matched" : [ {"non_csfle_schema" : "non_csfle_schema"} ]}""";
+
+            using var mongoClient = ConfigureClientEncrypted(kmsProviderFilter: "local",
+                keyVaultCollectionNamespace: keyVaultCollectionNamespace);
+            var collection = GetCollection(mongoClient, qeNamespace);
+            var result = collection.Aggregate(CreatePipeline(pipeline10)).Single();
+            result.Should().Be(BsonDocument.Parse(expectedResult10));
 
             PipelineDefinition<BsonDocument, BsonDocument> CreatePipeline(string pipelineJson)
             {
@@ -2942,8 +2961,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
         [ParameterAttributeData]
         public void ViewAreProhibitedTest([Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             var viewName = CollectionNamespace.FromFullName("db.view");
             using (var client = ConfigureClient(false))
             using (var clientEncrypted = ConfigureClientEncrypted(kmsProviderFilter: "local"))
@@ -2972,8 +2989,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Range(1, 2)] int testCase,
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             using (var client = ConfigureClient(clearCollections: true, writeConcern: WriteConcern.WMajority))
             {
                 var keyVaultCollection = GetCollection(client, __keyVaultCollectionNamespace);
@@ -3044,8 +3059,6 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             [Values("gcp")] string kmsProvider, // the rest kms providers are supported on all supported TFs
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.ClientSideEncryption);
-
             using (var clientEncrypted = ConfigureClientEncrypted(kmsProviderFilter: kmsProvider))
             using (var clientEncryption = ConfigureClientEncryption(clientEncrypted, kmsProviderNames: kmsProvider))
             {
@@ -3636,12 +3649,14 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             var qe2Namespace = new CollectionNamespace("db", "qe2");
             var noSchemaNamespace = new CollectionNamespace("db", "no_schema");
             var noSchema2Namespace = new CollectionNamespace("db", "no_schema2");
+            var nonCsfleSchemaNamespace = new CollectionNamespace("db", "non_csfle_schema");
 
             var keyDoc = JsonFileReader.Instance.Documents["etc.data.lookup.key-doc.json"];
             var schemaCsfle = JsonFileReader.Instance.Documents["etc.data.lookup.schema-csfle.json"];
             var schemaCsfle2 = JsonFileReader.Instance.Documents["etc.data.lookup.schema-csfle2.json"];
             var schemaQe = JsonFileReader.Instance.Documents["etc.data.lookup.schema-qe.json"];
             var schemaQe2 = JsonFileReader.Instance.Documents["etc.data.lookup.schema-qe2.json"];
+            var schemaNonCsfle = JsonFileReader.Instance.Documents["etc.data.lookup.schema-non-csfle.json"];
 
             // Setup
             using var clientEncrypted = ConfigureClientEncrypted(kmsProviderFilter: "local",
@@ -3655,6 +3670,7 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             DropCollection(qe2Namespace);
             DropCollection(noSchemaNamespace);
             DropCollection(noSchema2Namespace);
+            DropCollection(nonCsfleSchemaNamespace);
 
             CreateCollection(clientEncrypted, csfleNamespace,
                 validatorSchema: new BsonDocument("$jsonSchema", schemaCsfle));
@@ -3664,6 +3680,8 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             CreateCollection(clientEncrypted, qe2Namespace, encryptedFields: schemaQe2);
             CreateCollection(clientEncrypted, noSchemaNamespace);
             CreateCollection(clientEncrypted, noSchema2Namespace);
+            CreateCollection(clientEncrypted, nonCsfleSchemaNamespace,
+                validatorSchema: new BsonDocument("$jsonSchema", schemaNonCsfle));
 
             // Collections from encrypted client
             var keyVaultCollectionEncrypted = GetCollection(clientEncrypted, keyVaultCollectionNamespace);
@@ -3673,6 +3691,7 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
             var qe2CollectionEncrypted = GetCollection(clientEncrypted, qe2Namespace);
             var noSchemaCollectionEncrypted = GetCollection(clientEncrypted, noSchemaNamespace);
             var noSchema2CollectionEncrypted = GetCollection(clientEncrypted, noSchema2Namespace);
+            var nonCsfleSchemaCollectionEncrypted = GetCollection(clientEncrypted, nonCsfleSchemaNamespace);
 
             // Collections from plain (unencrypted) client
             var csfleCollection = GetCollection(client, csfleNamespace);
@@ -3703,6 +3722,7 @@ namespace MongoDB.Driver.Tests.Specifications.client_side_encryption.prose_tests
 
             noSchemaCollectionEncrypted.InsertOne(BsonDocument.Parse("""{"no_schema": "no_schema"}"""));
             noSchema2CollectionEncrypted.InsertOne(BsonDocument.Parse("""{"no_schema2": "no_schema2"}"""));
+            nonCsfleSchemaCollectionEncrypted.InsertOne(BsonDocument.Parse("""{"non_csfle_schema": "non_csfle_schema"}"""));
         }
 
         // nested types
