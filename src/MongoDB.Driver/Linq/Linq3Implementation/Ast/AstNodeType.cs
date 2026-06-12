@@ -101,6 +101,7 @@ namespace MongoDB.Driver.Linq.Linq3Implementation.Ast
         MedianAccumulatorExpression,
         MedianWindowExpression,
         MergeStage,
+        MinMaxScalerWindowExpression,
         ModFilterOperation,
         NaryExpression,
         NearFilterOperation,
