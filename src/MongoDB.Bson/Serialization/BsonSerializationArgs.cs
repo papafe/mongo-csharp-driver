@@ -59,6 +59,8 @@ namespace MongoDB.Bson.Serialization
 
         /// <summary>
         /// Gets or sets a value indicating whether to serialize the value as if it were an instance of the nominal type.
+        /// Members declared only by the actual type are not serialized, and any discriminator that is written identifies
+        /// the nominal type rather than the actual type.
         /// </summary>
         public bool SerializeAsNominalType
         {

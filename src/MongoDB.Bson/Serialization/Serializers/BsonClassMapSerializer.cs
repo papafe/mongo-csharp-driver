@@ -394,7 +394,7 @@ namespace MongoDB.Bson.Serialization
             }
 
             var actualType = value.GetType();
-            if (actualType == typeof(TClass))
+            if (actualType == typeof(TClass) || args.SerializeAsNominalType)
             {
                 SerializeClass(context, args, value);
                 return;
@@ -599,7 +599,7 @@ namespace MongoDB.Bson.Serialization
 
             if (ShouldSerializeDiscriminator(args.NominalType))
             {
-                SerializeDiscriminator(context, args.NominalType, document);
+                SerializeDiscriminator(context, args.NominalType, typeof(TClass)); // SerializeClass always writes a TClass shaped document
             }
 
             for (var i = 0; i < _classMap.AllMemberMaps.Count; i++)
@@ -644,12 +644,11 @@ namespace MongoDB.Bson.Serialization
             }
         }
 
-        private void SerializeDiscriminator(BsonSerializationContext context, Type nominalType, object obj)
+        private void SerializeDiscriminator(BsonSerializationContext context, Type nominalType, Type actualType)
         {
             var discriminatorConvention = _classMap.GetDiscriminatorConvention();
             if (discriminatorConvention != null)
             {
-                var actualType = obj.GetType();
                 var discriminator = discriminatorConvention.GetDiscriminator(nominalType, actualType);
                 if (discriminator != null)
                 {

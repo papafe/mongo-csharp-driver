@@ -15,12 +15,14 @@
 
 using System;
 using System.Buffers;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using FluentAssertions;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson.TestHelpers;
 using MongoDB.TestHelpers.XunitExtensions;
@@ -294,6 +296,56 @@ namespace MongoDB.Bson.Tests.Serialization
             result.Should().Be(0);
         }
 
+        [Fact]
+        public void Serialize_should_serialize_derived_value_as_actual_type_when_SerializeAsNominalType_is_false()
+        {
+            var subject = new BsonClassMapSerializer<Base>(CreateFrozenClassMap(typeof(Base)));
+            var value = new Derived { BaseProperty = "b", DerivedProperty = "d" };
+            var args = new BsonSerializationArgs { NominalType = typeof(Base) };
+
+            var result = Serialize(subject, args, value);
+
+            result.Should().Be("{ \"_t\" : \"Derived\", \"BaseProperty\" : \"b\", \"DerivedProperty\" : \"d\" }");
+        }
+
+        [Fact]
+        public void Serialize_should_serialize_derived_value_as_nominal_type_when_SerializeAsNominalType_is_true()
+        {
+            var subject = new BsonClassMapSerializer<Base>(CreateFrozenClassMap(typeof(Base)));
+            var value = new Derived { BaseProperty = "b", DerivedProperty = "d" };
+            var args = new BsonSerializationArgs { NominalType = typeof(Base), SerializeAsNominalType = true };
+
+            var result = Serialize(subject, args, value);
+
+            result.Should().Be("{ \"BaseProperty\" : \"b\" }");
+        }
+
+        [Fact]
+        public void Serialize_should_write_intermediate_type_discriminator_when_SerializeAsNominalType_is_true()
+        {
+            var subject = new BsonClassMapSerializer<Dog>(CreateFrozenClassMap(typeof(Dog)));
+            var value = new Puppy { Name = "Rex", Breed = "Lab", Age = 1 };
+            var args = new BsonSerializationArgs { NominalType = typeof(Dog), SerializeAsNominalType = true };
+
+            var result = Serialize(subject, args, value);
+
+            result.Should().Be("{ \"_t\" : [\"Pet\", \"Dog\"], \"Name\" : \"Rex\", \"Breed\" : \"Lab\" }");
+            BsonSerializer.Deserialize<Pet>(result).Should().BeOfType<Dog>();
+        }
+
+        [Fact]
+        public void Serialize_should_write_nominal_type_discriminator_when_SerializeAsNominalType_is_true()
+        {
+            var subject = new BsonClassMapSerializer<RootBase>(CreateFrozenClassMap(typeof(RootBase)));
+            var value = new RootDerived { BaseProperty = "b", DerivedProperty = "d" };
+            var args = new BsonSerializationArgs { NominalType = typeof(RootBase), SerializeAsNominalType = true };
+
+            var result = Serialize(subject, args, value);
+
+            result.Should().Be("{ \"_t\" : \"RootBase\", \"BaseProperty\" : \"b\" }");
+            BsonSerializer.Deserialize<RootBase>(result).Should().BeOfType<RootBase>();
+        }
+
         private IBsonSerializer BuildTypeAndGetSerializer(string propertyNamePrefix, int propertiesCount)
         {
             var assemblyName = new AssemblyName("DynamicAssembly");
@@ -326,10 +378,68 @@ namespace MongoDB.Bson.Tests.Serialization
             return classMapSerializer;
         }
 
+        private static BsonClassMap CreateFrozenClassMap(Type classType)
+        {
+            var classMap = new BsonClassMap(classType);
+            classMap.AutoMap();
+            classMap.Freeze();
+            return classMap;
+        }
+
+        private static string Serialize<TClass>(BsonClassMapSerializer<TClass> serializer, BsonSerializationArgs args, TClass value)
+        {
+            using var textWriter = new StringWriter();
+            using var writer = new JsonWriter(textWriter);
+
+            var context = BsonSerializationContext.CreateRoot(writer);
+            serializer.Serialize(context, args, value);
+
+            return textWriter.ToString();
+        }
+
         // nested classes
         private class MyModel
         {
             public string Id { get; set; }
+        }
+
+        private class Base
+        {
+            public string BaseProperty { get; set; }
+        }
+
+        private class Derived : Base
+        {
+            public string DerivedProperty { get; set; }
+        }
+
+        [BsonDiscriminator(RootClass = true, Required = true)]
+        private class RootBase
+        {
+            public string BaseProperty { get; set; }
+        }
+
+        private class RootDerived : RootBase
+        {
+            public string DerivedProperty { get; set; }
+        }
+
+        [BsonDiscriminator(RootClass = true)]
+        [BsonKnownTypes(typeof(Dog))]
+        private class Pet
+        {
+            public string Name { get; set; }
+        }
+
+        [BsonKnownTypes(typeof(Puppy))]
+        private class Dog : Pet
+        {
+            public string Breed { get; set; }
+        }
+
+        private class Puppy : Dog
+        {
+            public int Age { get; set; }
         }
 
         private class ModelWithCtor

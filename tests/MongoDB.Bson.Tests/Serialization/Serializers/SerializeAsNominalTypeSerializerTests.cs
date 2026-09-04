@@ -13,7 +13,9 @@
 * limitations under the License.
 */
 
+using System.IO;
 using FluentAssertions;
+using MongoDB.Bson.IO;
 using Xunit;
 
 namespace MongoDB.Bson.Serialization.Serializers
@@ -85,9 +87,48 @@ namespace MongoDB.Bson.Serialization.Serializers
             result.Should().Be(0);
         }
 
-        public class C { }
+        [Fact]
+        public void Serialize_should_serialize_value_using_the_nominal_type_class_map()
+        {
+            var classMap = new BsonClassMap(typeof(C));
+            classMap.AutoMap();
+            classMap.Freeze();
+            var subject = new SerializeAsNominalTypeSerializer<D, C>(new BsonClassMapSerializer<C>(classMap));
+            var value = new D { CProperty = "c", DProperty = "d" };
 
-        public class D : C { }
+            using var textWriter = new StringWriter();
+            using var writer = new JsonWriter(textWriter);
+            var context = BsonSerializationContext.CreateRoot(writer);
+            subject.Serialize(context, value);
+
+            textWriter.ToString().Should().Be("{ \"CProperty\" : \"c\" }");
+        }
+
+        [Fact]
+        public void Serialize_should_write_null_when_value_is_null()
+        {
+            var subject = new SerializeAsNominalTypeSerializer<D, C>();
+
+            using var textWriter = new StringWriter();
+            using var writer = new JsonWriter(textWriter);
+            var context = BsonSerializationContext.CreateRoot(writer);
+            writer.WriteStartDocument();
+            writer.WriteName("x");
+            subject.Serialize(context, null);
+            writer.WriteEndDocument();
+
+            textWriter.ToString().Should().Be("{ \"x\" : null }");
+        }
+
+        public class C
+        {
+            public string CProperty { get; set; }
+        }
+
+        public class D : C
+        {
+            public string DProperty { get; set; }
+        }
 
         public class CSerializer1 : SerializerBase<C> { }
 
