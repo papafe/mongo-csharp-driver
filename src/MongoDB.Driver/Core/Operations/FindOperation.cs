@@ -14,6 +14,8 @@
 */
 
 using System;
+using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -305,7 +307,14 @@ namespace MongoDB.Driver.Core.Operations
             {
                 var operation = CreateOperation();
                 var commandResult = operation.Execute(operationContext, context);
-                return CreateCursor(operationContext, context.ChannelSource, context.Channel, commandResult);
+                var cursor = CreateCursor(operationContext, context.ChannelSource, context.Channel, commandResult, out var firstBatchException);
+                if (firstBatchException != null)
+                {
+                    cursor.Close(operationContext.CancellationToken);
+                    firstBatchException.Throw();
+                }
+
+                return cursor;
             }
         }
 
@@ -328,18 +337,39 @@ namespace MongoDB.Driver.Core.Operations
             {
                 var operation = CreateOperation();
                 var commandResult = await operation.ExecuteAsync(operationContext, context).ConfigureAwait(false);
-                return CreateCursor(operationContext, context.ChannelSource, context.Channel, commandResult);
+                var cursor = CreateCursor(operationContext, context.ChannelSource, context.Channel, commandResult, out var firstBatchException);
+                if (firstBatchException != null)
+                {
+                    await cursor.CloseAsync(operationContext.CancellationToken).ConfigureAwait(false);
+                    firstBatchException.Throw();
+                }
+
+                return cursor;
             }
         }
 
-        private AsyncCursor<TDocument> CreateCursor(OperationContext operationContext, IChannelSourceHandle channelSource, IChannelHandle channel, BsonDocument commandResult)
+        // returns a cursor even when the first batch fails to deserialize, so that the caller can release the server-side cursor
+        private AsyncCursor<TDocument> CreateCursor(OperationContext operationContext, IChannelSourceHandle channelSource, IChannelHandle channel, BsonDocument commandResult, out ExceptionDispatchInfo firstBatchException)
         {
             var cursorDocument = commandResult["cursor"].AsBsonDocument;
             var collectionNamespace = CollectionNamespace.FromFullName(cursorDocument["ns"].AsString);
-            var firstBatch = CreateFirstCursorBatch(cursorDocument);
-            var getMoreChannelSource = ChannelPinningHelper.CreateGetMoreChannelSource(channelSource, channel, firstBatch.CursorId);
+            var cursorId = cursorDocument["id"].ToInt64();
 
-            if (cursorDocument.TryGetValue("atClusterTime", out var atClusterTime))
+            IReadOnlyList<TDocument> documents;
+            try
+            {
+                documents = DeserializeFirstBatch(cursorDocument);
+                firstBatchException = null;
+            }
+            catch (Exception exception)
+            {
+                documents = Array.Empty<TDocument>();
+                firstBatchException = ExceptionDispatchInfo.Capture(exception);
+            }
+
+            var getMoreChannelSource = ChannelPinningHelper.CreateGetMoreChannelSource(channelSource, channel, cursorId);
+
+            if (firstBatchException == null && cursorDocument.TryGetValue("atClusterTime", out var atClusterTime))
             {
                 operationContext.Session.SetSnapshotTimeIfNeeded(atClusterTime.AsBsonTimestamp);
             }
@@ -349,8 +379,8 @@ namespace MongoDB.Driver.Core.Operations
                 operationContext.Session.Fork(),
                 collectionNamespace,
                 _comment,
-                firstBatch.Documents,
-                firstBatch.CursorId,
+                documents,
+                cursorId,
                 _batchSize,
                 _limit < 0 ? Math.Abs(_limit.Value) : _limit,
                 _resultSerializer,
@@ -361,16 +391,10 @@ namespace MongoDB.Driver.Core.Operations
                 enableOverloadRetargeting: _enableOverloadRetargeting);
         }
 
-        private CursorBatch<TDocument> CreateFirstCursorBatch(BsonDocument cursorDocument)
+        private IReadOnlyList<TDocument> DeserializeFirstBatch(BsonDocument cursorDocument)
         {
-            var cursorId = cursorDocument["id"].ToInt64();
-            var batch = (RawBsonArray)cursorDocument["firstBatch"];
-
-            using (batch)
-            {
-                var documents = CursorBatchDeserializationHelper.DeserializeBatch(batch, _resultSerializer, _messageEncoderSettings);
-                return new CursorBatch<TDocument>(cursorId, documents);
-            }
+            using var batch = (RawBsonArray)cursorDocument["firstBatch"];
+            return CursorBatchDeserializationHelper.DeserializeBatch(batch, _resultSerializer, _messageEncoderSettings);
         }
 
         private EventContext.OperationIdDisposer BeginOperation() => EventContext.BeginOperation(null, OperationName);
